@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static metaheuristic.java_version_migration.MigrationUtils.isInComment;
+
 /**
  * @author Sergio Lissner
  * Date: 7/10/2023
@@ -68,11 +70,11 @@ public class MigrateSynchronizedJava21 {
             }
             switch (position.type) {
                 case method -> {
-                    code = processAsMethod(code, position, idx, cfg.globals().offset);
+                    code = processAsMethod(code, position, idx++, cfg.globals().offset);
                     changed = true;
                 }
                 case object -> {
-                    code= processAsObject(code, position, idx, cfg.globals().offset);
+                    code= processAsObject(code, position, idx++, cfg.globals().offset);
                     startOffset = position.start+1;
                 }
             }
@@ -173,16 +175,12 @@ public class MigrateSynchronizedJava21 {
     }
 
     public static String insertFirstPart(String content, Position position, int idx, int offset) {
-        int posPrevDelimiter = searchPrevDelimiter(content, position.start);
-        int posStartLine = MigrationUtils.searchStartLine(content, position.start);
+        int pos = calcPos(content, position);
 
-        int pos = Math.max(posPrevDelimiter, posStartLine);
-
-        boolean atStart = (pos==0);
         StringBuilder sb = new StringBuilder();
-        sb.append(content, 0, pos+(atStart ? 0 : 1 ));
-        String lock = appendReadWriteLock(idx, offset, atStart);
-        sb.append(lock).append(content, pos+(atStart ? 0 : 1 ), position.start);
+        sb.append(content, 0, pos);
+        String lock = appendReadWriteLock(idx, offset);
+        sb.append(lock).append(content, pos, position.start);
         if (Character.isWhitespace(content.charAt(position.start))) {
             sb.append(' ');
         }
@@ -191,24 +189,58 @@ public class MigrateSynchronizedJava21 {
         return sb.toString();
     }
 
-    private static String appendReadWriteLock(int idx, int offsetInt, boolean atStart) {
+    public static int calcPos(String content, Position position) {
+        int posPrevDelimiter = searchPrevDelimiter(content, position.start);
+        int posPrevAnnotation = searchPrevAnnotation(content, posPrevDelimiter, position.start);
+        int posStartLine = MigrationUtils.searchStartLine(content, position.start);
+
+        int pos = Math.max(posPrevDelimiter, Math.min(posPrevAnnotation, posStartLine));
+
+        boolean atStart = (pos==0 || pos==posPrevAnnotation) ;
+
+        int offset = 0;
+        if (!atStart) {
+            offset++;
+        }
+        return pos + offset;
+    }
+
+    private static String appendReadWriteLock(int idx, int offsetInt) {
         String offset = " ".repeat(offsetInt);
         String lock = String.format(
                 """
-                %sprivate static final ReentrantReadWriteLock lock%d = new ReentrantReadWriteLock();
-                %spublic static final ReentrantReadWriteLock.ReadLock readLock%d = lock%d.readLock();
-                %spublic static final ReentrantReadWriteLock.WriteLock writeLock%d = lock%d.writeLock();
                 
+                
+                %sprivate static final ReentrantReadWriteLock lock%d = new ReentrantReadWriteLock();
+                %sprivate static final ReentrantReadWriteLock.ReadLock readLock%d = lock%d.readLock();
+                %sprivate static final ReentrantReadWriteLock.WriteLock writeLock%d = lock%d.writeLock();
                 """, offset, idx, offset, idx, idx, offset, idx, idx);
 
         return lock;
     }
 
-    private static int searchPrevDelimiter(String content, int start) {
+    public static int searchPrevDelimiter(String content, int start) {
         for (int i = start-1; i >=0; i--) {
             char ch = content.charAt(i);
             if (ch==';' || ch=='}' || ch=='{') {
+                if (isInComment(content, i)) {
+                    continue;
+                }
                 return i;
+            }
+        }
+        return 0;
+    }
+
+    public static int searchPrevAnnotation(String content, int start, int end) {
+
+        for (int i = start+1; i <=end; i++) {
+            char ch = content.charAt(i);
+            if (ch=='@') {
+                if (isInComment(content, i)) {
+                    continue;
+                }
+                return MigrationUtils.searchStartLine(content, i);
             }
         }
         return 0;
@@ -228,7 +260,7 @@ public class MigrateSynchronizedJava21 {
                 continue;
             }
             Type type = null;
-            if (MigrationUtils.isInComment(content, start)) {
+            if (isInComment(content, start)) {
                 type = Type.comment;;
             }
             else if (MigrationUtils.isInVariable(content, start)) {

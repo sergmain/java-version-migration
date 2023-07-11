@@ -34,6 +34,7 @@ public class MigrateSynchronizedJava21Test {
         assertEquals(
                 """
                 class Text {
+
                     private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
                     public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
                     public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
@@ -82,6 +83,7 @@ public class MigrateSynchronizedJava21Test {
                     public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
                     public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
 
+
                     public boolean yes() {
                         writeLock1.lock();
                         try {
@@ -111,10 +113,11 @@ public class MigrateSynchronizedJava21Test {
         String r = insertFirstPart(code, positions.get(0), 1, 4);
 
         assertEquals("""
+
+
             private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
             public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
             public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
-
         public boolean yes() {
             return true;
         }
@@ -154,15 +157,16 @@ public class MigrateSynchronizedJava21Test {
                         int i=0;
                     }
                 
+                    private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
+                    public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
+                    public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
+
+
                 /**
                  * The stack of byte values. This class is not synchronized and should not be
                  * used by multiple threads concurrently.
                  */
                                  
-                    private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
-                    public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
-                    public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
-
                     public boolean yes() {
                         writeLock1.lock();
                         try {
@@ -457,4 +461,85 @@ public class MigrateSynchronizedJava21Test {
                 newCode);
 
     }
+
+    @Test
+    public void test_insertFirstPart_1() {
+        String code = """
+            class Text {
+            
+                @Override
+                public synchronized boolean yes() {
+                    return true;
+                }
+            }
+            """;
+
+        List<Position> positions = positions(code, true);
+        assertEquals(1, positions.size());
+
+        String r = insertFirstPart(code, positions.get(0), 1, 4);
+
+        assertEquals("""
+            class Text {
+
+
+                private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
+                public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
+                public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
+    
+                @Override
+                public boolean yes() {
+                    return true;
+                }
+            }
+            """,
+                r);
+    }
+
+    @Test
+    public void test_searchPrevDelimiter_1() {
+        String code = """
+            {
+            /*
+             * {
+             * }
+             */
+
+                @Override
+                public synchronized boolean yes() {
+                    return true;
+                }
+            }
+            """;
+
+        List<Position> positions = positions(code, true);
+        assertEquals(1, positions.size());
+
+        int idx = searchPrevDelimiter(code, positions.get(0).start());
+        assertEquals(0, idx);
+    }
+
+    @Test
+    public void test_searchPrevAnnotation_1() {
+        String code = """
+            {
+
+                @Override
+                public synchronized boolean yes() {
+                    return true;
+                }
+            }
+            """;
+
+        List<Position> positions = positions(code, true);
+        assertEquals(1, positions.size());
+
+        int prevDelimiter = searchPrevDelimiter(code, positions.get(0).start());
+
+        int idx = searchPrevAnnotation(code, prevDelimiter, positions.get(0).start());
+        assertEquals(2, idx);
+    }
+
+
+
 }
