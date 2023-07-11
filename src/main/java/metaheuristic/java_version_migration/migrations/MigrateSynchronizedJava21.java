@@ -23,7 +23,12 @@ public class MigrateSynchronizedJava21 {
     public static final Pattern SYNC_PATTERN = Pattern.compile("\\s+synchronized(\\s+|\\()");
     public static final Pattern PACKAGE_PATTERN = Pattern.compile("package\\s+");
 
-    public enum Type {method, object};
+    public enum Type {method(false), object(false), comment(true), variable(true);
+        public final boolean skip;
+        Type(boolean skip) {
+            this.skip = skip;
+        }
+    };
 
     public record Position(int start, int end, Type type) {};
     public record Content(String content, boolean changed) {};
@@ -34,8 +39,7 @@ public class MigrateSynchronizedJava21 {
             String content = Files.readString(cfg.path(), cfg.globals().getCharset());
             Content newContent = process(cfg, content);
             if (newContent.changed) {
-//                Files.writeString(cfg.path(), newContent.content, cfg.globals().getCharset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING);
-                Files.writeString(cfg.path(), newContent.content, cfg.globals().getCharset(), StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                Files.writeString(cfg.path(), newContent.content, cfg.globals().getCharset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                 System.out.println("\t\tprocessed for "+(System.currentTimeMillis() - mills));
             }
         } catch (Throwable th) {
@@ -54,24 +58,29 @@ public class MigrateSynchronizedJava21 {
 
         String code = content;
         int idx = 0;
-        boolean found = false;
+        boolean changed = false;
         int startOffset = -1;
         while (!(positions = positions(startOffset, code, true)).isEmpty()) {
-            found = true;
             Position position = positions.get(0);
-            if (MigrationUtils.isInCommentBlock(code, position.start)) {
+            if (position.type.skip) {
                 startOffset = position.start+1;
                 continue;
             }
             switch (position.type) {
-                case method -> code = processAsMethod(code, position, idx, cfg.globals().offset);
-                case object -> code= processAsObject(code, position, idx, cfg.globals().offset);
+                case method -> {
+                    code = processAsMethod(code, position, idx, cfg.globals().offset);
+                    changed = true;
+                }
+                case object -> {
+                    code= processAsObject(code, position, idx, cfg.globals().offset);
+                    startOffset = position.start+1;
+                }
             }
         }
-        if (found) {
+        if (changed) {
             code = insertImport(code);
         }
-        return new Content(code, found);
+        return new Content(code, changed);
     }
 
     public static String insertImport(String content) {
@@ -94,7 +103,7 @@ public class MigrateSynchronizedJava21 {
 
     private static String processAsObject(String content, Position position, int idx, int offset) {
 
-        return "";
+        return content;
     }
 
     public static String processAsMethod(String content, Position position, int idx, int offset) {
@@ -116,17 +125,18 @@ public class MigrateSynchronizedJava21 {
     public static String insertTry(String content, int openBracket, int closeBracket, int idx, int offsetInt) {
         String method = content.substring(openBracket+1, closeBracket);
         String offset = " ".repeat(offsetInt);
+        String doubleOffset = " ".repeat(offsetInt*2);
         String open = String.format(
                 """
                 
                 %swriteLock%d.lock();
-                %stry {""", offset, idx, offset);
+                %stry {""", doubleOffset, idx, doubleOffset);
         String close = String.format(
                 """
                 %s} finally {
                 %s    writeLock%d.unlock();
                 %s}
-                """, offset, offset, idx, offset);
+                %s""", offset, doubleOffset, idx, doubleOffset, offset);
 
         return content.substring(0, openBracket+1) +
                open +
@@ -164,7 +174,7 @@ public class MigrateSynchronizedJava21 {
 
     public static String insertFirstPart(String content, Position position, int idx, int offset) {
         int posPrevDelimiter = searchPrevDelimiter(content, position.start);
-        int posStartLine = searchStartLine(content, position.start);
+        int posStartLine = MigrationUtils.searchStartLine(content, position.start);
 
         int pos = Math.max(posPrevDelimiter, posStartLine);
 
@@ -179,16 +189,6 @@ public class MigrateSynchronizedJava21 {
         sb.append(content, position.end, content.length());
 
         return sb.toString();
-    }
-
-    private static int searchStartLine(String content, int start) {
-        for (int i = start-1; i >=0; i--) {
-            char ch = content.charAt(i);
-            if (ch=='\n' || ch=='\r') {
-                return i;
-            }
-        }
-        return 0;
     }
 
     private static String appendReadWriteLock(int idx, int offsetInt, boolean atStart) {
@@ -223,23 +223,31 @@ public class MigrateSynchronizedJava21 {
         List<Position> positions = new ArrayList<>();
         while (m.find()) {
             int start = m.start();
+            int end = m.end();
             if (start<=startOffset) {
                 continue;
             }
-            int end = m.end();
-            String s = content.substring(start, end);
             Type type = null;
-            if (s.endsWith("(")) {
-                type = Type.object;
+            if (MigrationUtils.isInComment(content, start)) {
+                type = Type.comment;;
+            }
+            else if (MigrationUtils.isInVariable(content, start)) {
+                type = Type.variable;;
             }
             else {
-                for (int i = end; i < content.length(); i++) {
-                    char ch=content.charAt(i);
-                    if (Character.isWhitespace(ch)) {
-                        continue;
+                String s = content.substring(start, end);
+                if (s.endsWith("(")) {
+                    type = Type.object;
+                }
+                else {
+                    for (int i = end; i < content.length(); i++) {
+                        char ch = content.charAt(i);
+                        if (Character.isWhitespace(ch)) {
+                            continue;
+                        }
+                        type = ch=='(' ? Type.object : Type.method;
+                        break;
                     }
-                    type = ch=='(' ? Type.object : Type.method;
-                    break;
                 }
             }
             if (type==null) {

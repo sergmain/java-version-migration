@@ -1,13 +1,13 @@
 package metaheuristic.java_version_migration.migrations;
 
-import metaheuristic.java_version_migration.MigrationUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21.*;
+import static metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21.Type.comment;
+import static metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21.Type.variable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author Sergio Lissner
@@ -20,8 +20,10 @@ public class MigrateSynchronizedJava21Test {
     public void test_processAsMethod_1() {
 
         String code = """
-                public synchronized boolean yes() {
-                    return true;
+                class Text {
+                    public synchronized boolean yes() {
+                        return true;
+                    }
                 }
                 """;
 
@@ -31,16 +33,18 @@ public class MigrateSynchronizedJava21Test {
 
         assertEquals(
                 """
+                class Text {
                     private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
                     public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
                     public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
 
-                public boolean yes() {
-                    writeLock1.lock();
-                    try {
-                    return true;
-                    } finally {
-                        writeLock1.unlock();
+                    public boolean yes() {
+                        writeLock1.lock();
+                        try {
+                        return true;
+                        } finally {
+                            writeLock1.unlock();
+                        }
                     }
                 }
                 """,
@@ -52,12 +56,14 @@ public class MigrateSynchronizedJava21Test {
     public void test_processAsMethod_2() {
 
         String code = """
-                public void some() {
-                    int i=0;
-                }
-                
-                public synchronized boolean yes() {
-                    return true;
+                class Text {
+                    public void some() {
+                        int i=0;
+                    }
+                    
+                    public synchronized boolean yes() {
+                        return true;
+                    }
                 }
                 """;
 
@@ -67,20 +73,22 @@ public class MigrateSynchronizedJava21Test {
 
         assertEquals(
                 """
-                public void some() {
-                    int i=0;
-                }
+                class Text {
+                    public void some() {
+                        int i=0;
+                    }
                 
                     private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
                     public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
                     public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
 
-                public boolean yes() {
-                    writeLock1.lock();
-                    try {
-                    return true;
-                    } finally {
-                        writeLock1.unlock();
+                    public boolean yes() {
+                        writeLock1.lock();
+                        try {
+                        return true;
+                        } finally {
+                            writeLock1.unlock();
+                        }
                     }
                 }
                 """,
@@ -118,30 +126,33 @@ public class MigrateSynchronizedJava21Test {
     public void test_processAsMethod_4() {
 
         String code = """
-                public void some() {
-                    int i=0;
-                }
+                class Text {
+                    public void some() {
+                        int i=0;
+                    }
                 
                 /**
                  * The stack of byte values. This class is not synchronized and should not be
                  * used by multiple threads concurrently.
                  */
                                  
-                public synchronized boolean yes() {
-                    return true;
+                    public synchronized boolean yes() {
+                        return true;
+                    }
                 }
                 """;
 
         List<Position> positions = positions(code, false);
-        assertTrue(MigrationUtils.isInCommentBlock(code, positions.get(0).start()));
+        assertEquals(comment, positions.get(0).type());
         assertEquals(2, positions.size());
         String r = processAsMethod(code, positions.get(1), 1, 4);
 
         assertEquals(
-                """
-                public void some() {
-                    int i=0;
-                }
+            """
+                class Text {
+                    public void some() {
+                        int i=0;
+                    }
                 
                 /**
                  * The stack of byte values. This class is not synchronized and should not be
@@ -152,12 +163,13 @@ public class MigrateSynchronizedJava21Test {
                     public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
                     public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
 
-                public boolean yes() {
-                    writeLock1.lock();
-                    try {
-                    return true;
-                    } finally {
-                        writeLock1.unlock();
+                    public boolean yes() {
+                        writeLock1.lock();
+                        try {
+                        return true;
+                        } finally {
+                            writeLock1.unlock();
+                        }
                     }
                 }
                 """,
@@ -235,6 +247,88 @@ public class MigrateSynchronizedJava21Test {
     }
 
     @Test
+    public void test_positions_4() {
+
+        String code = """
+                public void some() {
+                    int i=0;
+                }
+                
+                /**
+                 * The stack of byte values. This class is not synchronized and should not be
+                 * used by multiple threads concurrently.
+                 */
+                                 
+                public boolean yes() {
+                    return true;
+                }
+                """;
+
+        List<Position> positions = positions(code, true);
+        assertEquals(comment, positions.get(0).type());
+    }
+
+    @Test
+    public void test_positions_5() {
+
+        String code = """
+                public void some() {
+                    int i=0;
+                }
+                
+                
+                // The stack of byte values. This class is not synchronized and should not be
+                                 
+                public boolean yes() {
+                    return true;
+                }
+                """;
+
+        List<Position> positions = positions(code, true);
+        assertEquals(comment, positions.get(0).type());
+    }
+
+    @Test
+    public void test_positions_6() {
+
+        String code = """
+                /*
+                 * First comment
+                 */
+                package test;
+                
+                /**
+                 * stack is synchronized
+                 */
+                                  
+                public class Test {
+                    public boolean yes() {
+                        return true;
+                    }
+                }
+                """;
+
+        List<Position> positions = positions(code, true);
+        assertEquals(comment, positions.get(0).type());
+    }
+
+    @Test
+    public void test_positions_7() {
+
+        String code = """
+                public class Test {
+                    public boolean yes() {
+                        String message = " synchronized after ";
+                        return true;
+                    }
+                }
+                """;
+
+        List<Position> positions = positions(code, true);
+        assertEquals(variable, positions.get(0).type());
+    }
+
+    @Test
     public void test_findCloseBracket_1() {
         String code = """
                 public synchronized boolean yes() {
@@ -282,29 +376,33 @@ public class MigrateSynchronizedJava21Test {
     @Test
     public void test_insertTry_1() {
         String code = """
-                public synchronized boolean yes() {
-                    return true;
+                class Text {
+                    public synchronized boolean yes() {
+                        return true;
+                    }
                 }
                 """;
         List<Position> positions = positions(code, true);
         assertEquals(1, positions.size());
 
         int openIdx = findOpenBracket(code, positions.get(0));
-        assertEquals(34, openIdx);
+        assertEquals(51, openIdx);
 
 
         int closeIdx = findCloseBracket(code, positions.get(0));
-        assertEquals(53, closeIdx);
+        assertEquals(78, closeIdx);
 
         String newCode = insertTry(code, openIdx, closeIdx, 1, 4);
         assertEquals(
                 """
-                public synchronized boolean yes() {
-                    writeLock1.lock();
-                    try {
-                    return true;
-                    } finally {
-                        writeLock1.unlock();
+                class Text {
+                    public synchronized boolean yes() {
+                        writeLock1.lock();
+                        try {
+                        return true;
+                        } finally {
+                            writeLock1.unlock();
+                        }
                     }
                 }
                 """,
@@ -315,8 +413,10 @@ public class MigrateSynchronizedJava21Test {
     @Test
     public void test_insertImport_1() {
         String code = """
-                public synchronized boolean yes() {
-                    return true;
+                class Text {
+                    public synchronized boolean yes() {
+                        return true;
+                    }
                 }
                 """;
         String newCode = insertImport(code);
@@ -324,8 +424,10 @@ public class MigrateSynchronizedJava21Test {
                 """
                     import java.util.concurrent.locks.ReentrantReadWriteLock;
                                             
-                    public synchronized boolean yes() {
-                        return true;
+                    class Text {
+                        public synchronized boolean yes() {
+                            return true;
+                        }
                     }
                     """,
                 newCode);

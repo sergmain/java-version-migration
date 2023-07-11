@@ -15,13 +15,22 @@ public class MigrationUtils {
 
     public static final long SECONDS_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
+    public static boolean isInVariable(String content, int start) {
+        int lineStart = searchStartLine(content, start);
+        int quoteIdx = content.indexOf("\"", lineStart);
+
+        return quoteIdx!=-1 && quoteIdx<start;
+    }
+
+    public static boolean isInComment(String content, int start) {
+        return isInCommentBlock(content, start) || isInCommentLine(content, start);
+    }
+
     public static boolean isInCommentBlock(String content, int start) {
         int startCommentLeft = content.lastIndexOf("/*", start);
         int endCommentLeft = content.lastIndexOf("*/", start);
-        if (startCommentLeft!=-1 && endCommentLeft==-1) {
-            return true;
-        }
-        return isInCommentLine(content, start);
+
+        return (startCommentLeft!=-1 && endCommentLeft==-1) || (startCommentLeft>endCommentLeft);
     }
 
     public static boolean isInCommentLine(String content, int start) {
@@ -62,5 +71,15 @@ public class MigrationUtils {
             log.info(s);
         }
         return curr;
+    }
+
+    public static int searchStartLine(String content, int start) {
+        for (int i = start-1; i >=0; i--) {
+            char ch = content.charAt(i);
+            if (ch=='\n' || ch=='\r') {
+                return i;
+            }
+        }
+        return 0;
     }
 }
