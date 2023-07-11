@@ -23,28 +23,51 @@ public class MigrateSynchronizedJava21 {
     public enum Type {method, object};
 
     public record Position(int start, int end, Type type) {};
+    public record Content(String content, boolean changed) {};
 
     public static void migrateSynchronized(Migration.MigrationConfig cfg) {
         try {
             String content = Files.readString(cfg.path(), cfg.charset());
-            process(cfg.path(), content);
-            //Files.writeString(cfg.path(), content, cfg.charset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING);
+            Content newContent = process(cfg.path(), content);
+            if (newContent.changed) {
+                //Files.writeString(cfg.path(), newContent.content, cfg.charset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING);
+            }
         } catch (Throwable th) {
             log.error("Error with path " + cfg.path(), th);
         }
     }
 
-    private static void process(Path path, String content) {
-        List<Position> positions = positions(content);
+    private static Content process(Path path, String content) {
+        List<Position> positions = positions(content, false);
         if (positions.isEmpty()) {
-            return;
+            return new Content(content, false);
         }
         System.out.println(path.toString());
         positions.forEach(p->System.out.printf("\t%d %d %s\n", p.start, p.end, p.type));
 
+        String code = content;
+        int idx = 0;
+        while (!(positions= positions(content, true)).isEmpty()) {
+            Position position = positions.get(0);
+            switch (position.type) {
+                case method -> code = processAsMethod(code, position, idx);
+                case object -> code= processAsObject(code, position, idx);
+            }
+        }
+        return new Content(code, true);
     }
 
-    public static List<Position> positions(String content) {
+    private static String processAsObject(String content, Position position, int idx) {
+
+        return "";
+    }
+
+    private static String processAsMethod(String content, Position position, int idx) {
+
+        return "";
+    }
+
+    public static List<Position> positions(String content, boolean onlyFirst) {
         Matcher m = p.matcher(content);
         List<Position> positions = new ArrayList<>();
         while (m.find()) {
@@ -69,6 +92,9 @@ public class MigrateSynchronizedJava21 {
                 throw new IllegalStateException("(type==null)");
             }
             positions.add(new Position(start, end, type));
+            if (onlyFirst) {
+                break;
+            }
         }
         return positions;
     }

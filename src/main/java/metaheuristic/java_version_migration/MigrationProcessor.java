@@ -28,23 +28,18 @@ import static metaheuristic.java_version_migration.MigrationUtils.execStat;
  */
 public class MigrationProcessor {
 
-    public record ProcessingData(Path path, List<Path> exclude) {}
-
-    private static final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
+    private static ThreadPoolExecutor executor;
 
     public static final AtomicLong totalSize = new AtomicLong();
 
     public static void migrationProcessor(final Globals globals) throws IOException, InterruptedException {
+//        executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(globals.threads);
+        executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
         long mills = System.currentTimeMillis();
         for (Path path : globals.startingPath) {
             final IOFileFilter filter = FileFileFilter.INSTANCE.and(new SuffixFileFilter(new String[]{".java"}));
             try (Stream<Path> stream = PathUtils.walk(path, filter, Integer.MAX_VALUE, false, FileVisitOption.FOLLOW_LINKS)) {
-                stream.forEach((p) -> {
-                    Migration.functions.stream()
-                            .filter(f-> globals.startJavaVersion < f.version() && f.version() <= globals.targetJavaVersion)
-                            .flatMap(f->f.functions().stream())
-                            .forEach(f->executor.submit(() -> f.accept(new Migration.MigrationConfig(p, globals.getCharset()))));
-                });
+                stream.filter(p-> filterPath(p, globals.excludePath)).forEach(p -> process(p, globals));
             }
         }
 
@@ -56,9 +51,18 @@ public class MigrationProcessor {
         int i=0;
     }
 
-    public static void process(ProcessingData data) {
+    private static boolean filterPath(Path p, List<Path> excludePath) {
+        return true;
+    }
+
+    public static void process(Path path, Globals globals) {
         try {
-            totalSize.addAndGet(Files.size(data.path));
+            totalSize.addAndGet(Files.size(path));
+            Migration.functions.stream()
+                    .filter(f-> globals.startJavaVersion < f.version() && f.version() <= globals.targetJavaVersion)
+                    .flatMap(f->f.functions().stream())
+                    .forEach(f-> f.accept(new Migration.MigrationConfig(path, globals.getCharset())));
+
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

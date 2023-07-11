@@ -36,7 +36,7 @@ public class MigrateSynchronizedJava21Test {
                 }
                 """;
 
-        List<Position> positions = positions(code);
+        List<Position> positions = positions(code, false);
         assertEquals(3, positions.size());
         assertEquals(new Position(6, 20, Type.method), positions.get(0));
         assertEquals(new Position(77, 91, Type.object), positions.get(1));
@@ -57,7 +57,7 @@ public class MigrateSynchronizedJava21Test {
                 }
                 """;
 
-        List<Position> positions = positions(code);
+        List<Position> positions = positions(code, false);
         assertEquals(1, positions.size());
         assertEquals(new Position(24, 38, Type.object), positions.get(0));
 
