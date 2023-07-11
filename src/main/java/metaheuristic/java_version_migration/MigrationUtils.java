@@ -15,6 +15,28 @@ public class MigrationUtils {
 
     public static final long SECONDS_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
+    public static boolean isInCommentBlock(String content, int start) {
+        int startCommentLeft = content.lastIndexOf("/*", start);
+        int endCommentLeft = content.lastIndexOf("*/", start);
+        if (startCommentLeft!=-1 && endCommentLeft==-1) {
+            return true;
+        }
+        return isInCommentLine(content, start);
+    }
+
+    public static boolean isInCommentLine(String content, int start) {
+        for (int i = start; i >= 0; i--) {
+            char c = content.charAt(i);
+            if (c=='\n' || c=='\r') {
+                return false;
+            }
+            if (c=='/' && i>0 && content.charAt(i-1)=='/') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @SuppressWarnings("BusyWait")
     public static void waitTaskCompleted(ThreadPoolExecutor executor, int numberOfPeriods) throws InterruptedException {
         int i = 0;

@@ -30,6 +30,9 @@ public class Globals {
     public int threads = 4;
     private Charset charset;
 
+    // number of spaces as offset in code
+    public int offset = 4;
+
     public final List<Path> startingPath = new ArrayList<>();
     public final List<Path> excludePath = new ArrayList<>();
 
