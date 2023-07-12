@@ -24,3 +24,15 @@ public boolean yes() {
     }
 }
 ```
+
+
+### How to use
+
+- copy file config/application.sample.yml to config/application.yml
+- make value of field startingPath to directory with .java files, i.e. src
+- run metaheuristic.java_version_migration.MetaheuristicJavaVersionMigration.main
+
+### Roadmap
+
+[ ] add a support of migration of ```synchronized (variable) {}```   
+[ ] make field excludePath meaningful
