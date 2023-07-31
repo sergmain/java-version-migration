@@ -3,6 +3,7 @@ package metaheuristic.java_version_migration.migrations;
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.MigrationUtils;
+import metaheuristic.java_version_migration.meta.MetaUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,8 +23,103 @@ import static metaheuristic.java_version_migration.MigrationUtils.isInComment;
 @Slf4j
 public class MigrateSynchronizedJava21 {
 
+    interface LockerTypeCode {
+        String appendDeclarationLockVariables(int idx, int offsetInt);
+        String getImport();
+
+        String getCloseTry(int idx, String offset, String doubleOffset);
+        String getOpenTry(int idx, String doubleOffset);
+    }
+
+    public static class ReentrantReadWriteLockCode implements LockerTypeCode {
+        public  String appendDeclarationLockVariables(int idx, int offsetInt) {
+            String offset = " ".repeat(offsetInt);
+            String lock = String.format(
+                    """
+                    
+                    
+                    %sprivate static final ReentrantReadWriteLock lock%d = new ReentrantReadWriteLock();
+                    %sprivate static final ReentrantReadWriteLock.ReadLock readLock%d = lock%d.readLock();
+                    %sprivate static final ReentrantReadWriteLock.WriteLock writeLock%d = lock%d.writeLock();
+                    """, offset, idx, offset, idx, idx, offset, idx, idx);
+
+            return lock;
+        }
+
+        @Override
+        public String getImport() {
+            return "import java.util.concurrent.locks.ReentrantReadWriteLock;";
+        }
+
+        @Override
+        public String getCloseTry(int idx, String offset, String doubleOffset) {
+            String close = String.format(
+                    """
+                    %s} finally {
+                    %s    writeLock%d.unlock();
+                    %s}
+                    %s""", offset, doubleOffset, idx, doubleOffset, offset);
+            return close;
+        }
+
+        @Override
+        public String getOpenTry(int idx, String doubleOffset) {
+            String open = String.format(
+                    """
+                    
+                    %swriteLock%d.lock();
+                    %stry {""", doubleOffset, idx, doubleOffset);
+            return open;
+        }
+    }
+
+    public static class StampedLockCode implements LockerTypeCode {
+        public  String appendDeclarationLockVariables(int idx, int offsetInt) {
+            String offset = " ".repeat(offsetInt);
+            String lock = String.format(
+                    """
+                    
+                    
+                    %sprivate static final StampedLock lock%d = new StampedLock();
+                    """, offset, idx);
+
+            return lock;
+        }
+
+        @Override
+        public String getImport() {
+            return "import java.util.concurrent.locks.StampedLock;";
+        }
+
+        @Override
+        public String getCloseTry(int idx, String offset, String doubleOffset) {
+            String close = String.format(
+                    """
+                    %s} finally {
+                    %s    lock%d.unlock();
+                    %s}
+                    %s""", offset, doubleOffset, idx, doubleOffset, offset);
+            return close;
+        }
+
+        @Override
+        public String getOpenTry(int idx, String doubleOffset) {
+            String open = String.format(
+                    """
+                    
+                    %slock%d.lock();
+                    %stry {""", doubleOffset, idx, doubleOffset);
+            return open;
+        }
+    }
+
+    public static final ReentrantReadWriteLockCode REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE = new ReentrantReadWriteLockCode();
+    public static final StampedLockCode STAMPED_LOCK_CODE_INSTANCE = new StampedLockCode();
+
     public static final Pattern SYNC_PATTERN = Pattern.compile("\\s+synchronized(\\s+|\\()");
     public static final Pattern PACKAGE_PATTERN = Pattern.compile("package\\s+");
+
+    public static final String MIGRATE_SYNCHRONIZED_LOCKER = "migrateSynchronizedLocker";
 
     public enum Type {method(false), object(false), comment(true), variable(true);
         public final boolean skip;
@@ -31,9 +127,22 @@ public class MigrateSynchronizedJava21 {
             this.skip = skip;
         }
     };
+    public enum LockerType { StampedLock(STAMPED_LOCK_CODE_INSTANCE), ReentrantReadWriteLock(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE);
+
+        public final LockerTypeCode lockerTypeCode;
+
+        LockerType(LockerTypeCode lockerTypeCode) {
+            this.lockerTypeCode = lockerTypeCode;
+        }
+    }
 
     public record Position(int start, int end, Type type) {};
     public record Content(String content, boolean changed) {};
+
+    public static LockerType getLockerType(Migration.MigrationConfig cfg) {
+        final String type = MetaUtils.getValue(cfg.globals().metas, MIGRATE_SYNCHRONIZED_LOCKER);
+        return type==null ? LockerType.ReentrantReadWriteLock : LockerType.valueOf(type);
+    }
 
     public static void migrateSynchronized(Migration.MigrationConfig cfg) {
         try {
@@ -50,11 +159,13 @@ public class MigrateSynchronizedJava21 {
     }
 
     private static Content process(Migration.MigrationConfig cfg, String content) {
+
         Path path = cfg.path();
         List<Position> positions = positions(content, true);
         if (positions.isEmpty()) {
             return new Content(content, false);
         }
+        LockerType lockerType = getLockerType(cfg);
         System.out.println(path.toString());
         positions.forEach(p->System.out.printf("\t%d %d %s\n", p.start, p.end, p.type));
 
@@ -70,7 +181,7 @@ public class MigrateSynchronizedJava21 {
             }
             switch (position.type) {
                 case method -> {
-                    code = processAsMethod(code, position, idx++, cfg.globals().offset);
+                    code = processAsMethod(lockerType.lockerTypeCode, code, position, idx++, cfg.globals().offset);
                     changed = true;
                 }
                 case object -> {
@@ -80,12 +191,12 @@ public class MigrateSynchronizedJava21 {
             }
         }
         if (changed) {
-            code = insertImport(code);
+            code = insertImport(lockerType.lockerTypeCode, code);
         }
         return new Content(code, changed);
     }
 
-    public static String insertImport(String content) {
+    public static String insertImport(LockerTypeCode lockerTypeCode, String content) {
         Matcher m = PACKAGE_PATTERN.matcher(content);
         String code;
         if (m.find()) {
@@ -95,10 +206,10 @@ public class MigrateSynchronizedJava21 {
                 throw new IllegalStateException("(idx==-1)");
             }
 
-            code = content.substring(0, idx+1) + "\n\nimport java.util.concurrent.locks.ReentrantReadWriteLock;" + content.substring(idx+1);
+            code = content.substring(0, idx+1) + "\n\n"+ lockerTypeCode.getImport() + content.substring(idx+1);
         }
         else {
-            code = "import java.util.concurrent.locks.ReentrantReadWriteLock;\n\n" + content;
+            code = lockerTypeCode.getImport()+"\n\n" + content;
         }
         return code;
     }
@@ -108,44 +219,36 @@ public class MigrateSynchronizedJava21 {
         return content;
     }
 
-    public static String processAsMethod(String content, Position position, int idx, int offset) {
-        String code = appendSecondPart(content, position, idx, offset);
-        code = insertFirstPart(code, position, idx, offset);
+    public static String processAsMethod(LockerTypeCode lockerTypeCode, String content, Position position, int idx, int offset) {
+        String code = appendSecondPart(lockerTypeCode, content, position, idx, offset);
+        code = insertFirstPart(lockerTypeCode, code, position, idx, offset);
 
         return code;
     }
 
-    private static String appendSecondPart(String content, Position position, int idx, int offset) {
+    private static String appendSecondPart(LockerTypeCode lockerTypeCode, String content, Position position, int idx, int offset) {
         int openBracket = findOpenBracket(content, position);
         int closeBracket = findCloseBracket(content, position);
 
-        String code = insertTry(content, openBracket, closeBracket, idx, offset);
+        String code = insertTry(lockerTypeCode, content, openBracket, closeBracket, idx, offset);
 
         return code;
     }
 
-    public static String insertTry(String content, int openBracket, int closeBracket, int idx, int offsetInt) {
-        String method = content.substring(openBracket+1, closeBracket);
+    public static String insertTry(LockerTypeCode lockerTypeCode, String content, int openBracket, int closeBracket, int idx, int offsetInt) {
         String offset = " ".repeat(offsetInt);
         String doubleOffset = " ".repeat(offsetInt*2);
-        String open = String.format(
-                """
-                
-                %swriteLock%d.lock();
-                %stry {""", doubleOffset, idx, doubleOffset);
-        String close = String.format(
-                """
-                %s} finally {
-                %s    writeLock%d.unlock();
-                %s}
-                %s""", offset, doubleOffset, idx, doubleOffset, offset);
+        String open = lockerTypeCode.getOpenTry(idx, doubleOffset);
+        String close = lockerTypeCode.getCloseTry(idx, offset, doubleOffset);
 
+        String method = content.substring(openBracket+1, closeBracket);
         return content.substring(0, openBracket+1) +
                open +
                method +
                close +
                content.substring(closeBracket);
     }
+
 
     public static int findOpenBracket(String content, Position position) {
         for (int i = position.end; i < content.length(); i++) {
@@ -174,12 +277,12 @@ public class MigrateSynchronizedJava21 {
         throw new IllegalStateException("not found");
     }
 
-    public static String insertFirstPart(String content, Position position, int idx, int offset) {
+    public static String insertFirstPart(LockerTypeCode lockerTypeCode, String content, Position position, int idx, int offset) {
         int pos = calcPos(content, position);
 
         StringBuilder sb = new StringBuilder();
         sb.append(content, 0, pos);
-        String lock = appendReadWriteLock(idx, offset);
+        String lock = lockerTypeCode.appendDeclarationLockVariables(idx, offset);
         sb.append(lock).append(content, pos, position.start);
         if (Character.isWhitespace(content.charAt(position.start))) {
             sb.append(' ');
@@ -203,20 +306,6 @@ public class MigrateSynchronizedJava21 {
             offset++;
         }
         return pos + offset;
-    }
-
-    private static String appendReadWriteLock(int idx, int offsetInt) {
-        String offset = " ".repeat(offsetInt);
-        String lock = String.format(
-                """
-                
-                
-                %sprivate static final ReentrantReadWriteLock lock%d = new ReentrantReadWriteLock();
-                %sprivate static final ReentrantReadWriteLock.ReadLock readLock%d = lock%d.readLock();
-                %sprivate static final ReentrantReadWriteLock.WriteLock writeLock%d = lock%d.writeLock();
-                """, offset, idx, offset, idx, idx, offset, idx, idx);
-
-        return lock;
     }
 
     public static int searchPrevDelimiter(String content, int start) {

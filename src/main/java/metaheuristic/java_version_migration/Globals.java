@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Sergio Lissner
@@ -35,6 +36,8 @@ public class Globals {
 
     public final List<Path> startingPath = new ArrayList<>();
     public final List<Path> excludePath = new ArrayList<>();
+
+    public List<Map<String, String>> metas = new ArrayList<>();
 
     public Charset getCharset() {
         return charset==null ? StandardCharsets.UTF_8 : charset;

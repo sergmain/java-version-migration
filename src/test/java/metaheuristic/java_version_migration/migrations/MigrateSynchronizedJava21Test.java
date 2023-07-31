@@ -29,15 +29,15 @@ public class MigrateSynchronizedJava21Test {
 
         List<Position> positions = positions(code, true);
         assertEquals(1, positions.size());
-        String r = processAsMethod(code, positions.get(0), 1, 4);
+        String r = processAsMethod(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code, positions.get(0), 1, 4);
 
         assertEquals(
                 """
                 class Text {
 
                     private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
-                    public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
-                    public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
+                    private static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
+                    private static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
 
                     public boolean yes() {
                         writeLock1.lock();
@@ -70,7 +70,7 @@ public class MigrateSynchronizedJava21Test {
 
         List<Position> positions = positions(code, true);
         assertEquals(1, positions.size());
-        String r = processAsMethod(code, positions.get(0), 1, 4);
+        String r = processAsMethod(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code, positions.get(0), 1, 4);
 
         assertEquals(
                 """
@@ -80,8 +80,8 @@ public class MigrateSynchronizedJava21Test {
                     }
                 
                     private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
-                    public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
-                    public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
+                    private static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
+                    private static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
 
 
                     public boolean yes() {
@@ -110,14 +110,14 @@ public class MigrateSynchronizedJava21Test {
         assertEquals(1, positions.size());
         assertEquals(new Position(6, 20, Type.method), positions.get(0));
 
-        String r = insertFirstPart(code, positions.get(0), 1, 4);
+        String r = insertFirstPart(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code, positions.get(0), 1, 4);
 
         assertEquals("""
 
 
             private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
-            public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
-            public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
+            private static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
+            private static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
         public boolean yes() {
             return true;
         }
@@ -148,7 +148,7 @@ public class MigrateSynchronizedJava21Test {
         List<Position> positions = positions(code, false);
         assertEquals(comment, positions.get(0).type());
         assertEquals(2, positions.size());
-        String r = processAsMethod(code, positions.get(1), 1, 4);
+        String r = processAsMethod(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code, positions.get(1), 1, 4);
 
         assertEquals(
             """
@@ -158,8 +158,8 @@ public class MigrateSynchronizedJava21Test {
                     }
                 
                     private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
-                    public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
-                    public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
+                    private static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
+                    private static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
 
 
                 /**
@@ -396,7 +396,7 @@ public class MigrateSynchronizedJava21Test {
         int closeIdx = findCloseBracket(code, positions.get(0));
         assertEquals(78, closeIdx);
 
-        String newCode = insertTry(code, openIdx, closeIdx, 1, 4);
+        String newCode = insertTry(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code, openIdx, closeIdx, 1, 4);
         assertEquals(
                 """
                 class Text {
@@ -423,7 +423,7 @@ public class MigrateSynchronizedJava21Test {
                     }
                 }
                 """;
-        String newCode = insertImport(code);
+        String newCode = insertImport(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code);
         assertEquals(
                 """
                     import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -447,7 +447,7 @@ public class MigrateSynchronizedJava21Test {
                     return true;
                 }
                 """;
-        String newCode = insertImport(code);
+        String newCode = insertImport(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code);
         assertEquals(
                 """
                     package metaheuristic;
@@ -477,15 +477,15 @@ public class MigrateSynchronizedJava21Test {
         List<Position> positions = positions(code, true);
         assertEquals(1, positions.size());
 
-        String r = insertFirstPart(code, positions.get(0), 1, 4);
+        String r = insertFirstPart(REENTRANT_READ_WRITE_LOCK_CODE_INSTANCE, code, positions.get(0), 1, 4);
 
         assertEquals("""
             class Text {
 
 
                 private static final ReentrantReadWriteLock lock1 = new ReentrantReadWriteLock();
-                public static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
-                public static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
+                private static final ReentrantReadWriteLock.ReadLock readLock1 = lock1.readLock();
+                private static final ReentrantReadWriteLock.WriteLock writeLock1 = lock1.writeLock();
     
                 @Override
                 public boolean yes() {
