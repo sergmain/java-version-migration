@@ -1,6 +1,7 @@
 package metaheuristic.java_version_migration.migrations;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.util.List;
 
@@ -8,12 +9,14 @@ import static metaheuristic.java_version_migration.migrations.MigrateSynchronize
 import static metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21.Type.comment;
 import static metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21.Type.variable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 /**
  * @author Sergio Lissner
  * Date: 7/10/2023
  * Time: 10:27 PM
  */
+@Execution(CONCURRENT)
 public class MigrateSynchronizedJava21Test {
 
     @Test
