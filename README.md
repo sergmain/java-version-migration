@@ -25,6 +25,17 @@ public boolean yes() {
 }
 ```
 
+default lock implementation which will be used is ReentrantReadWriteLock
+```yaml
+    - migrateSynchronizedLocker: ReentrantReadWriteLock
+```
+
+it can be changed to StampedLock with
+```yaml
+    - migrateSynchronizedLocker: StampedLock
+```
+
+see config/application.sample.yml 
 
 ### How to use
 

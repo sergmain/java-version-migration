@@ -5,3 +5,6 @@ migration:
         - src
     excludePath:
         - target
+    metas:
+#        - migrateSynchronizedLocker: StampedLock
+#        - migrateSynchronizedLocker: ReentrantReadWriteLock
