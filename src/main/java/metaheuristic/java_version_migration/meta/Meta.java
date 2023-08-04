@@ -24,7 +24,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class Meta {
-    // !!! DO NOT CHANGE THAT CLASS UNDER ANY CIRCUMSTANCES !!!
     public String key;
     public String value;
 }
