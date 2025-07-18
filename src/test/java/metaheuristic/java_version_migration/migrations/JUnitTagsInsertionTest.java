@@ -116,6 +116,96 @@ class JUnitTagsInsertionTest {
     }
 
     @Test
+    @DisplayName("Should handle Windows drive letters and backslash separators")
+    void shouldHandleWindowsDriveLettersAndBackslashSeparators() {
+        // Given
+        List<String> excludePackages = Arrays.asList("excluded", "test", "temp");
+
+        // Test with C: drive and backslashes
+        Path windowsFilePath1 = Paths.get("C:\\Users\\Developer\\Projects\\src\\main\\java\\excluded\\MyClass.java");
+        boolean result1 = PathUtils.isEnd(windowsFilePath1, excludePackages);
+        assertTrue(result1, "Should return true for Windows file with C: drive in 'excluded' directory");
+
+        // Test with D: drive and backslashes
+        Path windowsFilePath2 = Paths.get("D:\\workspace\\project\\modules\\test\\TestClass.java");
+        boolean result2 = PathUtils.isEnd(windowsFilePath2, excludePackages);
+        assertTrue(result2, "Should return true for Windows file with D: drive in 'test' directory");
+
+        // Test mixed separators (backslash and forward slash)
+        Path mixedFilePath = Paths.get("C:\\Projects/src\\main/java\\temp\\TempFile.java");
+        boolean result3 = PathUtils.isEnd(mixedFilePath, excludePackages);
+        assertTrue(result3, "Should handle mixed path separators on Windows");
+
+        // Test file that is not in excluded package directory
+        Path nonMatchingFilePath = Paths.get("C:\\Users\\Developer\\Projects\\src\\main\\java\\allowed\\MyClass.java");
+        boolean result4 = PathUtils.isEnd(nonMatchingFilePath, excludePackages);
+        assertFalse(result4, "Should return false when Windows file is not in excluded package directory");
+    }
+
+    @Test
+    @DisplayName("Should handle UNC paths and network shares")
+    void shouldHandleUNCPathsAndNetworkShares() {
+        // Given
+        List<String> excludePackages = Arrays.asList("excluded", "test", "shared");
+
+        // Test UNC path with server and share
+        Path uncFilePath1 = Paths.get("\\\\server\\share\\projects\\src\\excluded\\MyClass.java");
+        boolean result1 = PathUtils.isEnd(uncFilePath1, excludePackages);
+        assertTrue(result1, "Should return true for UNC file in 'excluded' directory");
+
+        // Test UNC path with nested folders
+        Path uncFilePath2 = Paths.get("\\\\fileserver\\development\\workspace\\modules\\test\\TestFile.java");
+        boolean result2 = PathUtils.isEnd(uncFilePath2, excludePackages);
+        assertTrue(result2, "Should return true for UNC file in 'test' directory");
+
+        // Test when UNC path contains excluded package in share name but file is not in excluded directory
+        Path uncFilePath3 = Paths.get("\\\\server\\shared\\projects\\src\\allowed\\MyClass.java");
+        boolean result3 = PathUtils.isEnd(uncFilePath3, excludePackages);
+        assertFalse(result3, "Should return false when UNC file has excluded package in share name but is not in excluded directory");
+
+        // Test UNC path where file is in directory that ends with excluded package matching share name
+        Path uncFilePath4 = Paths.get("\\\\server\\documents\\shared\\MyFile.txt");
+        boolean result4 = PathUtils.isEnd(uncFilePath4, excludePackages);
+        assertTrue(result4, "Should return true when UNC file is in directory ending with excluded package name");
+    }
+
+    @Test
+    @DisplayName("Should handle Windows case sensitivity and long paths")
+    void shouldHandleWindowsCaseSensitivityAndLongPaths() {
+        // Given - test case insensitivity (Windows file system is case-insensitive)
+        List<String> excludePackages = Arrays.asList("EXCLUDED", "Test", "temp");
+
+        // Test lowercase file with uppercase excluded package
+        Path lowerCaseFilePath = Paths.get("C:\\projects\\src\\main\\java\\excluded\\MyClass.java");
+        boolean result1 = PathUtils.isEnd(lowerCaseFilePath, excludePackages);
+        // Note: This depends on how the method handles case sensitivity
+        // The current implementation is case-sensitive, but we test the behavior
+        assertFalse(result1, "Current implementation is case-sensitive - 'excluded' != 'EXCLUDED'");
+
+        // Test mixed case file with mixed case excluded package
+        Path mixedCaseFilePath = Paths.get("C:\\Projects\\Src\\Main\\Java\\Test\\TestClass.java");
+        boolean result2 = PathUtils.isEnd(mixedCaseFilePath, excludePackages);
+        assertTrue(result2, "Should return true for exact case match");
+
+        // Test very long Windows file path
+        String longPathSegment = "VeryLongDirectoryNameThatExceedsTypicalLengthLimitsForTestingPurposes";
+        Path longFilePath = Paths.get("C:\\Users\\Developer\\Projects\\" + longPathSegment +
+                                      "\\src\\main\\java\\com\\example\\very\\deep\\nested\\structure\\temp\\VeryLongFileName.java");
+        boolean result3 = PathUtils.isEnd(longFilePath, excludePackages);
+        assertTrue(result3, "Should handle very long Windows file paths correctly");
+
+        // Test absolute vs relative file path behavior
+        Path relativeFilePath = Paths.get("..\\..\\src\\excluded\\MyClass.java");
+        boolean result4 = PathUtils.isEnd(relativeFilePath, Arrays.asList("excluded"));
+        assertTrue(result4, "Should handle relative Windows file paths with parent directory references");
+
+        // Test file path with spaces (common in Windows)
+        Path filePathWithSpaces = Paths.get("C:\\Program Files\\My Application\\src\\main\\excluded\\MyClass.java");
+        boolean result5 = PathUtils.isEnd(filePathWithSpaces, Arrays.asList("excluded"));
+        assertTrue(result5, "Should handle Windows file paths with spaces correctly");
+    }
+
+    @Test
     void testModify_AddsImportAndTagAnnotation_WhenBothMissing() {
         // Given
         String originalContent = """
@@ -246,92 +336,38 @@ class JUnitTagsInsertionTest {
     }
 
     @Test
-    @DisplayName("Should handle Windows drive letters and backslash separators")
-    void shouldHandleWindowsDriveLettersAndBackslashSeparators() {
-        // Given
-        List<String> excludePackages = Arrays.asList("excluded", "test", "temp");
+    void testModify_NoChanges_WhenFileIsNotClass() {
+        // Given - package-info.java content with no class declaration
+        String originalContent = """
+            @ParametersAreNonnullByDefault
+            package cons411.trafaret3;
+            
+            import javax.annotation.ParametersAreNonnullByDefault;
+            """;
 
-        // Test with C: drive and backslashes
-        Path windowsFilePath1 = Paths.get("C:\\Users\\Developer\\Projects\\src\\main\\java\\excluded\\MyClass.java");
-        boolean result1 = PathUtils.isEnd(windowsFilePath1, excludePackages);
-        assertTrue(result1, "Should return true for Windows file with C: drive in 'excluded' directory");
+        String tag = "integration";
 
-        // Test with D: drive and backslashes
-        Path windowsFilePath2 = Paths.get("D:\\workspace\\project\\modules\\test\\TestClass.java");
-        boolean result2 = PathUtils.isEnd(windowsFilePath2, excludePackages);
-        assertTrue(result2, "Should return true for Windows file with D: drive in 'test' directory");
+        // When
+        String result = modify(originalContent, tag);
 
-        // Test mixed separators (backslash and forward slash)
-        Path mixedFilePath = Paths.get("C:\\Projects/src\\main/java\\temp\\TempFile.java");
-        boolean result3 = PathUtils.isEnd(mixedFilePath, excludePackages);
-        assertTrue(result3, "Should handle mixed path separators on Windows");
+        // Then
+        assertEquals(originalContent, result,
+            "Content should remain unchanged when file contains no class declaration");
 
-        // Test file that is not in excluded package directory
-        Path nonMatchingFilePath = Paths.get("C:\\Users\\Developer\\Projects\\src\\main\\java\\allowed\\MyClass.java");
-        boolean result4 = PathUtils.isEnd(nonMatchingFilePath, excludePackages);
-        assertFalse(result4, "Should return false when Windows file is not in excluded package directory");
-    }
+        // Verify no Tag import was added
+        assertFalse(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should not add Tag import when file has no class declaration");
 
-    @Test
-    @DisplayName("Should handle UNC paths and network shares")
-    void shouldHandleUNCPathsAndNetworkShares() {
-        // Given
-        List<String> excludePackages = Arrays.asList("excluded", "test", "shared");
+        // Verify no @Tag annotation was added
+        assertFalse(result.contains("@Tag(\"integration\")"),
+            "Should not add @Tag annotation when file has no class declaration");
 
-        // Test UNC path with server and share
-        Path uncFilePath1 = Paths.get("\\\\server\\share\\projects\\src\\excluded\\MyClass.java");
-        boolean result1 = PathUtils.isEnd(uncFilePath1, excludePackages);
-        assertTrue(result1, "Should return true for UNC file in 'excluded' directory");
-
-        // Test UNC path with nested folders
-        Path uncFilePath2 = Paths.get("\\\\fileserver\\development\\workspace\\modules\\test\\TestFile.java");
-        boolean result2 = PathUtils.isEnd(uncFilePath2, excludePackages);
-        assertTrue(result2, "Should return true for UNC file in 'test' directory");
-
-        // Test when UNC path contains excluded package in share name but file is not in excluded directory
-        Path uncFilePath3 = Paths.get("\\\\server\\shared\\projects\\src\\allowed\\MyClass.java");
-        boolean result3 = PathUtils.isEnd(uncFilePath3, excludePackages);
-        assertFalse(result3, "Should return false when UNC file has excluded package in share name but is not in excluded directory");
-
-        // Test UNC path where file is in directory that ends with excluded package matching share name
-        Path uncFilePath4 = Paths.get("\\\\server\\documents\\shared\\MyFile.txt");
-        boolean result4 = PathUtils.isEnd(uncFilePath4, excludePackages);
-        assertTrue(result4, "Should return true when UNC file is in directory ending with excluded package name");
-    }
-
-    @Test
-    @DisplayName("Should handle Windows case sensitivity and long paths")
-    void shouldHandleWindowsCaseSensitivityAndLongPaths() {
-        // Given - test case insensitivity (Windows file system is case-insensitive)
-        List<String> excludePackages = Arrays.asList("EXCLUDED", "Test", "temp");
-
-        // Test lowercase file with uppercase excluded package
-        Path lowerCaseFilePath = Paths.get("C:\\projects\\src\\main\\java\\excluded\\MyClass.java");
-        boolean result1 = PathUtils.isEnd(lowerCaseFilePath, excludePackages);
-        // Note: This depends on how the method handles case sensitivity
-        // The current implementation is case-sensitive, but we test the behavior
-        assertFalse(result1, "Current implementation is case-sensitive - 'excluded' != 'EXCLUDED'");
-
-        // Test mixed case file with mixed case excluded package
-        Path mixedCaseFilePath = Paths.get("C:\\Projects\\Src\\Main\\Java\\Test\\TestClass.java");
-        boolean result2 = PathUtils.isEnd(mixedCaseFilePath, excludePackages);
-        assertTrue(result2, "Should return true for exact case match");
-
-        // Test very long Windows file path
-        String longPathSegment = "VeryLongDirectoryNameThatExceedsTypicalLengthLimitsForTestingPurposes";
-        Path longFilePath = Paths.get("C:\\Users\\Developer\\Projects\\" + longPathSegment +
-                                      "\\src\\main\\java\\com\\example\\very\\deep\\nested\\structure\\temp\\VeryLongFileName.java");
-        boolean result3 = PathUtils.isEnd(longFilePath, excludePackages);
-        assertTrue(result3, "Should handle very long Windows file paths correctly");
-
-        // Test absolute vs relative file path behavior
-        Path relativeFilePath = Paths.get("..\\..\\src\\excluded\\MyClass.java");
-        boolean result4 = PathUtils.isEnd(relativeFilePath, Arrays.asList("excluded"));
-        assertTrue(result4, "Should handle relative Windows file paths with parent directory references");
-
-        // Test file path with spaces (common in Windows)
-        Path filePathWithSpaces = Paths.get("C:\\Program Files\\My Application\\src\\main\\excluded\\MyClass.java");
-        boolean result5 = PathUtils.isEnd(filePathWithSpaces, Arrays.asList("excluded"));
-        assertTrue(result5, "Should handle Windows file paths with spaces correctly");
+        // Verify original content is preserved
+        assertTrue(result.contains("@ParametersAreNonnullByDefault"),
+            "Should preserve existing annotations");
+        assertTrue(result.contains("package cons411.trafaret3;"),
+            "Should preserve package declaration");
+        assertTrue(result.contains("import javax.annotation.ParametersAreNonnullByDefault;"),
+            "Should preserve existing imports");
     }
 }

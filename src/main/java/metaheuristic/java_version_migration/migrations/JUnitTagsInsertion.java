@@ -72,21 +72,52 @@ public class JUnitTagsInsertion {
         
         * find declaration of class and check a presence of annotation @Tag
         * if @Tag is absent add new annotation @Tag(tag) there tag is variable
-        * return modified content""";
+        * return modified content
+        
+        new requirement:
+        * if file isn't class (declaration of class not present) then import must not be added
+        
+        for testing use such content
+        
+        ```
+        @ParametersAreNonnullByDefault
+        package cons411.trafaret3;
+        
+        import javax.annotation.ParametersAreNonnullByDefault;
+        ```
+        """;
 
     public static String modify(String content, String tag) {
         String modifiedContent = content;
 
-        // Check if import already exists
+        // Check if file contains class declaration
+        boolean hasClassDeclaration = hasClassDeclaration(content);
+
+        // Only add import if file has class declaration and import doesn't already exist
         String importStatement = "import org.junit.jupiter.api.Tag;";
-        if (!content.contains(importStatement)) {
+        if (hasClassDeclaration && !content.contains(importStatement)) {
             modifiedContent = addImport(modifiedContent, importStatement);
         }
 
-        // Check if @Tag annotation already exists and add if missing
-        modifiedContent = addTagAnnotation(modifiedContent, tag);
+        // Check if @Tag annotation already exists and add if missing (only for classes)
+        if (hasClassDeclaration) {
+            modifiedContent = addTagAnnotation(modifiedContent, tag);
+        }
 
         return modifiedContent;
+    }
+
+    private static boolean hasClassDeclaration(String content) {
+        // Pattern to find class, interface, or enum declaration
+        // Matches: [annotations] [modifiers] class/interface/enum ClassName
+        Pattern classPattern = Pattern.compile(
+            "(?:@\\w+(?:\\([^)]*\\))?\\s*)*" +  // Optional annotations
+            "(?:(?:public|private|protected|abstract|final|static)\\s+)*" +  // Optional modifiers (zero or more)
+            "(?:class|interface|enum)\\s+\\w+",  // class/interface/enum declaration
+            Pattern.MULTILINE
+        );
+
+        return classPattern.matcher(content).find();
     }
 
     private static String addImport(String content, String importStatement) {
