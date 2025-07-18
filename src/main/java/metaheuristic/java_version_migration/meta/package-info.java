@@ -1,0 +1,4 @@
+@ParametersAreNonnullByDefault
+package metaheuristic.java_version_migration.meta;
+
+import javax.annotation.ParametersAreNonnullByDefault;

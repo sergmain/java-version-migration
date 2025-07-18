@@ -18,6 +18,7 @@ package metaheuristic.java_version_migration;
 
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.data.Content;
+import metaheuristic.java_version_migration.migrations.JUnitTagsInsertion;
 import metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21;
 import metaheuristic.java_version_migration.migrations.RemoveDoubleLF;
 
@@ -41,8 +42,9 @@ public class Migration {
 
     public static final List<MigrationFunctions> functions = Stream.of(
             new MigrationFunctions(21, List.of(
-                    MigrateSynchronizedJava21::process,
-                    RemoveDoubleLF::process
+//                    MigrateSynchronizedJava21::process,
+//                    RemoveDoubleLF::process
+                JUnitTagsInsertion::process
             )))
             .sorted(Comparator.comparingInt(MigrationFunctions::version)).toList();
 

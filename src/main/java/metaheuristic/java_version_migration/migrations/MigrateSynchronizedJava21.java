@@ -20,11 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.MigrationUtils;
 import metaheuristic.java_version_migration.data.Content;
-import metaheuristic.java_version_migration.meta.MetaUtils;
+import metaheuristic.java_version_migration.utils.MetaUtils;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
