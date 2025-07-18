@@ -22,12 +22,12 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.0.8</version>
+        <version>3.3.11</version>
         <relativePath/>
     </parent>
     <groupId>ai.metaheuristic</groupId>
     <artifactId>java-version-migration</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 
     <packaging>jar</packaging>
 
@@ -38,8 +38,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
     </properties>
 
     <dependencies>
@@ -104,7 +104,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <compilerArgument>-parameters</compilerArgument>
-                    <release>17</release>
+                    <release>21</release>
                     <encoding>${project.build.sourceEncoding}</encoding>
                     <showDeprecation>true</showDeprecation>
                 </configuration>
@@ -113,7 +113,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>ai.metaheuristic.ai.MetaheuristicApplication</mainClass>
+                    <mainClass>metaheuristic.java_version_migration.MetaheuristicJavaVersionMigration</mainClass>
                 </configuration>
             </plugin>
         </plugins>

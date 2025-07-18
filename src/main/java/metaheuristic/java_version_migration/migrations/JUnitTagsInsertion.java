@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. Sergio Lissner
+ * Copyright (c) 2025. Sergio Lissner
  *
  *     Licensed under the Apache License, Version 2.0 (the "License");
  *     you may not use this file except in compliance with the License.
@@ -21,25 +21,12 @@ import metaheuristic.java_version_migration.data.Content;
 
 /**
  * @author Sergio Lissner
- * Date: 11/9/2023
- * Time: 8:03 PM
+ * Date: 7/18/2025
+ * Time: 2:32 PM
  */
-public class RemoveDoubleLF {
+public class JUnitTagsInsertion {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
-        StringBuilder sb = new StringBuilder(content);
-        boolean changed=false;
-        for (int i = 0; i < content.length() - 1; i++) {
-            char[] chars = new char[2];
-            sb.getChars(i, i+1, chars, 0);
-            if (chars[0] ==7 && chars[0]==chars[1] ) {
-                sb.deleteCharAt(i);
-                changed = true;
-                i--;
-            }
-        }
-
-        return new Content(sb.toString(), changed);
+        return new Content(content, false);
     }
-
 }

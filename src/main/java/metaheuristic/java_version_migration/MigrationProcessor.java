@@ -16,6 +16,8 @@
 
 package metaheuristic.java_version_migration;
 
+import lombok.extern.slf4j.Slf4j;
+import metaheuristic.java_version_migration.data.Content;
 import org.apache.commons.io.file.PathUtils;
 import org.apache.commons.io.filefilter.FileFileFilter;
 import org.apache.commons.io.filefilter.IOFileFilter;
@@ -25,10 +27,12 @@ import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
 import static metaheuristic.java_version_migration.MigrationUtils.execStat;
@@ -38,6 +42,7 @@ import static metaheuristic.java_version_migration.MigrationUtils.execStat;
  * Date: 7/10/2023
  * Time: 8:40 PM
  */
+@Slf4j
 public class MigrationProcessor {
 
     public static final AtomicLong totalSize = new AtomicLong();
@@ -71,11 +76,24 @@ public class MigrationProcessor {
             Migration.functions.stream()
                     .filter(f-> globals.startJavaVersion < f.version() && f.version() <= globals.targetJavaVersion)
                     .flatMap(f->f.functions().stream())
-                    .forEach(f-> f.accept(new Migration.MigrationConfig(path, globals)));
+                    .forEach(f-> changeContent(f, new Migration.MigrationConfig(path, globals)));
 
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
+    public static void changeContent(BiFunction<Migration.MigrationConfig, String, Content> func, Migration.MigrationConfig cfg) {
+        try {
+            long mills = System.currentTimeMillis();
+            String content = Files.readString(cfg.path(), cfg.globals().getCharset());
+            Content newContent = func.apply(cfg, content);
+            if (newContent.changed()) {
+                Files.writeString(cfg.path(), newContent.content(), cfg.globals().getCharset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                System.out.println("\t\tprocessed for "+(System.currentTimeMillis() - mills));
+            }
+        } catch (Throwable th) {
+            log.error("Error with path " + cfg.path(), th);
+        }
+    }
 }

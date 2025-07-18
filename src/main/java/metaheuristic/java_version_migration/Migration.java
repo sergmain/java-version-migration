@@ -17,13 +17,14 @@
 package metaheuristic.java_version_migration;
 
 import lombok.extern.slf4j.Slf4j;
+import metaheuristic.java_version_migration.data.Content;
 import metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21;
 import metaheuristic.java_version_migration.migrations.RemoveDoubleLF;
 
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
 /**
@@ -36,12 +37,12 @@ import java.util.stream.Stream;
 public class Migration {
 
     public record MigrationConfig(Path path, Globals globals) {}
-    public record MigrationFunctions(int version, List<Consumer<MigrationConfig>> functions) {}
+    public record MigrationFunctions(int version, List<BiFunction<Migration.MigrationConfig, String, Content>> functions) {}
 
     public static final List<MigrationFunctions> functions = Stream.of(
             new MigrationFunctions(21, List.of(
-//                    MigrateSynchronizedJava21::migrateSynchronized
-                    RemoveDoubleLF::migrateSynchronized
+                    MigrateSynchronizedJava21::process,
+                    RemoveDoubleLF::process
             )))
             .sorted(Comparator.comparingInt(MigrationFunctions::version)).toList();
 

@@ -19,6 +19,7 @@ package metaheuristic.java_version_migration.migrations;
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.MigrationUtils;
+import metaheuristic.java_version_migration.data.Content;
 import metaheuristic.java_version_migration.meta.MetaUtils;
 
 import java.nio.file.Files;
@@ -70,29 +71,14 @@ public class MigrateSynchronizedJava21 {
         }
     }
 
-    public record Position(int start, int end, Type type) {};
-    public record Content(String content, boolean changed) {};
+    public record Position(int start, int end, Type type) {};;
 
     public static LockerType getLockerType(Migration.MigrationConfig cfg) {
         final String type = MetaUtils.getValue(cfg.globals().metas, MIGRATE_SYNCHRONIZED_LOCKER);
         return type==null ? LockerType.ReentrantReadWriteLock : LockerType.valueOf(type);
     }
 
-    public static void migrateSynchronized(Migration.MigrationConfig cfg) {
-        try {
-            long mills = System.currentTimeMillis();
-            String content = Files.readString(cfg.path(), cfg.globals().getCharset());
-            Content newContent = process(cfg, content);
-            if (newContent.changed) {
-                Files.writeString(cfg.path(), newContent.content, cfg.globals().getCharset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                System.out.println("\t\tprocessed for "+(System.currentTimeMillis() - mills));
-            }
-        } catch (Throwable th) {
-            log.error("Error with path " + cfg.path(), th);
-        }
-    }
-
-    private static Content process(Migration.MigrationConfig cfg, String content) {
+    public static Content process(Migration.MigrationConfig cfg, String content) {
 
         Path path = cfg.path();
         List<Position> positions = positions(content, true);
