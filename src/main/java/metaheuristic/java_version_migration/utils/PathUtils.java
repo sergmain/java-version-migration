@@ -34,7 +34,35 @@ public class PathUtils {
         
         that method must decide is given path ending with any package from excludePackages list
         
-        Path path is actually a file, not directory""";
+        Path path is actually a file, not directory
+        
+        new requirement:
+        
+        add new parameter to method which define base path:
+        
+        Path srcPath
+        
+        for determine exclude or not srcPath should be added by exclude path and then compare with 'path' variable.
+        
+        as a result such unit  test  should be working:
+        
+        ```
+        @Test
+        void test_exclude_as_root_package() {
+            // Given
+            Path path = Paths.get("src/main/java/com/example/excluded/a/b/c/file.txt");
+            List<String> excludePackages = Arrays.asList("excluded.a");
+        
+            // When
+            boolean result = PathUtils.isEnd(path, excludePackages);
+        
+            // Then
+            assertTrue(result, "Should return true when path ends with 'excluded' package");
+        
+        }
+        ```
+        
+        """;
     /**
      * Checks if the given file path's directory ends with any package from the excludePackages list.
      *
@@ -42,31 +70,38 @@ public class PathUtils {
      * @param excludePackages list of package names to check against
      * @return true if the file's directory path ends with any of the excluded packages, false otherwise
      */
-    public static boolean isEnd(Path path, List<String> excludePackages) {
-        if (path == null || excludePackages == null || excludePackages.isEmpty()) {
+    /**
+     * Checks if the given file path's directory starts with any exclude path constructed from srcPath + excludePackages.
+     *
+     * @param path the file path to check
+     * @param excludePackages list of package names (dot-separated) to check against
+     * @param srcPath the base source path to combine with exclude packages
+     * @return true if the file's directory path starts with any of the constructed exclude paths, false otherwise
+     */
+    public static boolean isEnd(Path path, List<String> excludePackages, Path srcPath) {
+        if (path == null || excludePackages == null || excludePackages.isEmpty() || srcPath == null) {
             return false;
         }
 
         // Get the parent directory path (excluding the filename)
-        Path parentPath = Files.isDirectory(path) ? path : path.getParent();
+        Path parentPath = path.getParent();
         if (parentPath == null) {
             return false; // No parent directory
         }
 
         String pathString = parentPath.toString().replace('\\', '/'); // Normalize path separators
+        String srcPathString = srcPath.toString().replace('\\', '/'); // Normalize source path
 
         for (String excludePackage : excludePackages) {
             if (excludePackage != null && !excludePackage.isEmpty()) {
-                // Normalize the package path
-                String normalizedPackage = excludePackage.replace('\\', '/');
+                // Convert dot-separated package to path (e.g., "excluded.a" -> "excluded/a")
+                String packagePath = excludePackage.replace('.', '/');
 
-                // Check if directory path ends with the package
-                if (pathString.endsWith(normalizedPackage)) {
-                    return true;
-                }
+                // Combine srcPath with exclude package path
+                String fullExcludePath = srcPathString + "/" + packagePath;
 
-                // Also check with leading slash to ensure proper package boundary
-                if (pathString.endsWith("/" + normalizedPackage)) {
+                // Check if file's directory path starts with the constructed exclude path
+                if (pathString.startsWith(fullExcludePath)) {
                     return true;
                 }
             }

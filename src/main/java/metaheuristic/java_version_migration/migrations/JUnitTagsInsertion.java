@@ -41,8 +41,9 @@ public class JUnitTagsInsertion {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
         String excludePackages = MetaUtils.getValue(cfg.globals().metas, "junitTagsExcludePackages");
-        List<String> excludes = excludePackages==null || excludePackages.isBlank() ? List.of() : cache.computeIfAbsent(excludePackages, (k)-> Arrays.stream(StringUtils.split(k)).toList());
-        boolean b = PathUtils.isEnd(cfg.path(), excludes);
+        List<String> excludes = excludePackages==null || excludePackages.isBlank() ? List.of() : cache.computeIfAbsent(excludePackages, (k)-> Arrays.stream(StringUtils.split(k, ", ")).toList());
+        Path base  = Path.of(MetaUtils.getValue(cfg.globals().metas, "junitSrcBase"));
+        boolean b = PathUtils.isEnd(cfg.path(), excludes, base);
         if (b) {
             return new Content(content, false);
         }
@@ -85,6 +86,22 @@ public class JUnitTagsInsertion {
         
         import javax.annotation.ParametersAreNonnullByDefault;
         ```
+        
+        change in execution logic:
+        * add import if it not already added to file, import must be added in import section java class
+        handle a case when import was done with *, like
+        
+        ```
+        import org.junit.jupiter.api.*;
+        ```
+        
+        
+        import for adding:
+        
+        ```
+        import org.junit.jupiter.api.Tag;
+        ```
+        
         """;
 
     public static String modify(String content, String tag) {
@@ -95,7 +112,7 @@ public class JUnitTagsInsertion {
 
         // Only add import if file has class declaration and import doesn't already exist
         String importStatement = "import org.junit.jupiter.api.Tag;";
-        if (hasClassDeclaration && !content.contains(importStatement)) {
+        if (hasClassDeclaration && !isTagImportPresent(content)) {
             modifiedContent = addImport(modifiedContent, importStatement);
         }
 
@@ -105,6 +122,22 @@ public class JUnitTagsInsertion {
         }
 
         return modifiedContent;
+    }
+
+    private static boolean isTagImportPresent(String content) {
+        // Check for specific Tag import
+        Pattern specificImportPattern = Pattern.compile("import\\s+org\\.junit\\.jupiter\\.api\\.Tag\\s*;", Pattern.MULTILINE);
+        if (specificImportPattern.matcher(content).find()) {
+            return true;
+        }
+
+        // Check for wildcard import that covers Tag
+        Pattern wildcardImportPattern = Pattern.compile("import\\s+org\\.junit\\.jupiter\\.api\\.\\*\\s*;", Pattern.MULTILINE);
+        if (wildcardImportPattern.matcher(content).find()) {
+            return true;
+        }
+
+        return false;
     }
 
     private static boolean hasClassDeclaration(String content) {
@@ -201,5 +234,4 @@ public class JUnitTagsInsertion {
 
         // If no class declaration found, return original content
         return content;
-    }
-}
+    }}
