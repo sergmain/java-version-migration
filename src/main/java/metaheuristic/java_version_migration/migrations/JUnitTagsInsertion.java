@@ -52,10 +52,22 @@ public class JUnitTagsInsertion {
             throw new IllegalStateException();
         }
 
-        String newContent = modify(content, tag);
+        String strategy = MetaUtils.getValue(cfg.globals().metas, "junitTagsStrategy");
+        ExistTagStrategy existTagStrategy = (strategy==null || strategy.isBlank()) ? ExistTagStrategy.SKIP : to(strategy);
+
+        String newContent = modify(content, tag, existTagStrategy);
 
         Content result = new Content(newContent, !newContent.equals(content));
         return result;
+    }
+
+    public static ExistTagStrategy to(String s) {
+        for (ExistTagStrategy value : ExistTagStrategy.values()) {
+            if (value.name().equalsIgnoreCase(s)) {
+                return value;
+            }
+        }
+        throw new IllegalStateException("unknown strategy: " + s);
     }
 
     private static String claude_modify = """
@@ -104,7 +116,69 @@ public class JUnitTagsInsertion {
         
         """;
 
-    public static String modify(String content, String tag) {
+    // Strategy interface
+    public interface TagStrategy {
+        String handleExistingTag(String content, String tag, String existingTag);
+    }
+
+    // Enum that wraps strategy method references
+    public enum ExistTagStrategy {
+        ADD(AddTagStrategy::handleExistingTag),
+        SKIP(SkipTagStrategy::handleExistingTag),
+        REPLACE(ReplaceTagStrategy::handleExistingTag);
+
+        private final TagStrategy strategy;
+
+        ExistTagStrategy(TagStrategy strategy) {
+            this.strategy = strategy;
+        }
+
+        public TagStrategy getStrategy() {
+            return strategy;
+        }
+    }
+
+    // Skip strategy - don't modify if @Tag already exists
+    static class SkipTagStrategy {
+        public static String handleExistingTag(String content, String tag, String existingTag) {
+            return content; // Return unchanged
+        }
+    }
+
+    // Replace strategy - replace existing @Tag with new one
+    static class ReplaceTagStrategy {
+        public static String handleExistingTag(String content, String tag, String existingTag) {
+            String newTag = "@Tag(\"" + tag + "\")";
+            return content.replace(existingTag, newTag);
+        }
+    }
+
+    // Add strategy - add new @Tag alongside existing one
+    static class AddTagStrategy {
+        public static String handleExistingTag(String content, String tag, String existingTag) {
+            // Find the position after the existing @Tag annotation
+            Pattern existingTagPattern = Pattern.compile("@Tag\\s*\\([^)]*\\)", Pattern.MULTILINE);
+            Matcher matcher = existingTagPattern.matcher(content);
+
+            if (matcher.find()) {
+                int insertPos = matcher.end();
+                // Skip any whitespace after the existing annotation
+                while (insertPos < content.length() && Character.isWhitespace(content.charAt(insertPos))) {
+                    insertPos++;
+                }
+                String additionalTag = "@Tag(\"" + tag + "\")\n";
+                return content.substring(0, insertPos) + additionalTag + content.substring(insertPos);
+            }
+
+            return content;
+        }
+    }
+
+    public static String modify(String content, String tag, ExistTagStrategy existTagStrategy) {
+        return modify(content, tag, existTagStrategy.getStrategy());
+    }
+
+    public static String modify(String content, String tag, TagStrategy strategy) {
         String modifiedContent = content;
 
         // Check if file contains class declaration
@@ -116,12 +190,17 @@ public class JUnitTagsInsertion {
             modifiedContent = addImport(modifiedContent, importStatement);
         }
 
-        // Check if @Tag annotation already exists and add if missing (only for classes)
+        // Handle @Tag annotation based on strategy (only for classes)
         if (hasClassDeclaration) {
-            modifiedContent = addTagAnnotation(modifiedContent, tag);
+            modifiedContent = addTagAnnotation(modifiedContent, tag, strategy);
         }
 
         return modifiedContent;
+    }
+
+    // Backward compatibility - defaults to SKIP strategy
+    public static String modify(String content, String tag) {
+        return modify(content, tag, ExistTagStrategy.SKIP);
     }
 
     private static boolean isTagImportPresent(String content) {
@@ -192,19 +271,23 @@ public class JUnitTagsInsertion {
         }
     }
 
-    private static String addTagAnnotation(String content, String tag) {
+    private static String addTagAnnotation(String content, String tag, TagStrategy strategy) {
         // Check if @Tag annotation already exists
         Pattern existingTagPattern = Pattern.compile("@Tag\\s*\\([^)]*\\)", Pattern.MULTILINE);
-        if (existingTagPattern.matcher(content).find()) {
-            // @Tag annotation already exists, return content unchanged
-            return content;
+        Matcher existingTagMatcher = existingTagPattern.matcher(content);
+
+        if (existingTagMatcher.find()) {
+            // @Tag annotation already exists, delegate to strategy
+            String existingTag = existingTagMatcher.group();
+            return strategy.handleExistingTag(content, tag, existingTag);
         }
 
+        // No existing @Tag annotation, add new one
         // Pattern to find class declaration
         // Matches: [annotations] [modifiers] class ClassName
         Pattern classPattern = Pattern.compile(
             "((?:@\\w+(?:\\([^)]*\\))?\\s*)*)" +  // Capture existing annotations
-            "((?:public|private|protected|abstract|final|static)\\s+)*" +  // Modifiers
+            "((?:(?:public|private|protected|abstract|final|static)\\s+)*)" +  // Modifiers
             "(class|interface|enum)\\s+\\w+",  // class/interface/enum declaration
             Pattern.MULTILINE
         );
@@ -234,4 +317,7 @@ public class JUnitTagsInsertion {
 
         // If no class declaration found, return original content
         return content;
-    }}
+    }
+
+
+}

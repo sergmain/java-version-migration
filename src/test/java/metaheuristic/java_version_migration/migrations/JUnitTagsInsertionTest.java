@@ -24,9 +24,11 @@ import org.junit.jupiter.api.parallel.Execution;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
+import static metaheuristic.java_version_migration.migrations.JUnitTagsInsertion.*;
+import static metaheuristic.java_version_migration.migrations.JUnitTagsInsertion.TagStrategy;
+import static metaheuristic.java_version_migration.migrations.JUnitTagsInsertion.TagStrategy.*;
 import static metaheuristic.java_version_migration.migrations.JUnitTagsInsertion.modify;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
@@ -38,95 +40,6 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
  */
 @Execution(CONCURRENT)
 class JUnitTagsInsertionTest {
-
-    @Test
-    void testModify_AddsImportAndTagAnnotation_WhenBothMissing() {
-        // Given
-        String originalContent = """
-            package com.example.test;
-            
-            import java.util.List;
-            
-            public class TestClass {
-                public void testMethod() {
-                    // test implementation
-                }
-            }
-            """;
-
-        String tag = "integration";
-
-        // When
-        String result = modify(originalContent, tag);
-
-        // Then
-        assertTrue(result.contains("import org.junit.jupiter.api.Tag;"),
-            "Should add Tag import");
-        assertTrue(result.contains("@Tag(\"integration\")"),
-            "Should add @Tag annotation with correct tag value");
-        assertTrue(result.contains("import java.util.List;"),
-            "Should preserve existing imports");
-        assertTrue(result.contains("public class TestClass"),
-            "Should preserve class declaration");
-
-        // Verify import is in correct location (after existing imports)
-        int tagImportIndex = result.indexOf("import org.junit.jupiter.api.Tag;");
-        int listImportIndex = result.indexOf("import java.util.List;");
-        assertTrue(tagImportIndex > listImportIndex,
-            "Tag import should be after existing imports");
-
-        // Verify annotation is before class declaration
-        int annotationIndex = result.indexOf("@Tag(\"integration\")");
-        int classIndex = result.indexOf("public class TestClass");
-        assertTrue(annotationIndex < classIndex,
-            "@Tag annotation should be before class declaration");
-    }
-
-    @Test
-    void testModify_AddsOnlyTagAnnotation_WhenImportExists() {
-        // Given
-        String originalContent = """
-            package com.example.test;
-            
-            import java.util.List;
-            import org.junit.jupiter.api.Tag;
-            import org.junit.jupiter.api.Test;
-            
-            public class ExistingImportTest {
-                @Test
-                public void someTest() {
-                    // test implementation
-                }
-            }
-            """;
-
-        String tag = "unit";
-
-        // When
-        String result = modify(originalContent, tag);
-
-        // Then
-        assertTrue(result.contains("@Tag(\"unit\")"),
-            "Should add @Tag annotation with correct tag value");
-
-        // Verify that Tag import appears only once
-        int firstImportIndex = result.indexOf("import org.junit.jupiter.api.Tag;");
-        int lastImportIndex = result.lastIndexOf("import org.junit.jupiter.api.Tag;");
-        assertEquals(firstImportIndex, lastImportIndex,
-            "Tag import should appear only once");
-
-        // Verify annotation is before class declaration
-        int annotationIndex = result.indexOf("@Tag(\"unit\")");
-        int classIndex = result.indexOf("public class ExistingImportTest");
-        assertTrue(annotationIndex < classIndex,
-            "@Tag annotation should be before class declaration");
-
-        // Verify existing imports are preserved
-        assertTrue(result.contains("import java.util.List;"),
-            "Should preserve existing imports");
-        assertTrue(result.contains("import org.junit.jupiter.api.Test;"),
-            "Should preserve existing imports");
-    }
 
     @Test
     void testModify_NoChanges_WhenImportAndTagAnnotationExist() {
@@ -167,87 +80,6 @@ class JUnitTagsInsertionTest {
         int lastImportIndex = result.lastIndexOf("import org.junit.jupiter.api.Tag;");
         assertEquals(firstImportIndex, lastImportIndex,
             "Tag import should appear only once");
-    }
-
-    @Test
-    void testModify_NoChanges_WhenFileIsNotClass() {
-        // Given - package-info.java content with no class declaration
-        String originalContent = """
-            @ParametersAreNonnullByDefault
-            package cons411.trafaret3;
-            
-            import javax.annotation.ParametersAreNonnullByDefault;
-            """;
-
-        String tag = "integration";
-
-        // When
-        String result = modify(originalContent, tag);
-
-        // Then
-        assertEquals(originalContent, result,
-            "Content should remain unchanged when file contains no class declaration");
-
-        // Verify no Tag import was added
-        assertFalse(result.contains("import org.junit.jupiter.api.Tag;"),
-            "Should not add Tag import when file has no class declaration");
-
-        // Verify no @Tag annotation was added
-        assertFalse(result.contains("@Tag(\"integration\")"),
-            "Should not add @Tag annotation when file has no class declaration");
-
-        // Verify original content is preserved
-        assertTrue(result.contains("@ParametersAreNonnullByDefault"),
-            "Should preserve existing annotations");
-        assertTrue(result.contains("package cons411.trafaret3;"),
-            "Should preserve package declaration");
-        assertTrue(result.contains("import javax.annotation.ParametersAreNonnullByDefault;"),
-            "Should preserve existing imports");
-    }
-
-    @Test
-    void testModify_AddsOnlyTagAnnotation_WhenWildcardImportExists() {
-        // Given
-        String originalContent = """
-            package com.example.test;
-            
-            import java.util.List;
-            import org.junit.jupiter.api.*;
-            
-            public class WildcardImportTest {
-                @Test
-                public void someTest() {
-                    // test implementation
-                }
-            }
-            """;
-
-        String tag = "unit";
-
-        // When
-        String result = modify(originalContent, tag);
-
-        // Then
-        assertTrue(result.contains("@Tag(\"unit\")"),
-            "Should add @Tag annotation with correct tag value");
-
-        // Verify that specific Tag import was NOT added (since wildcard covers it)
-        assertFalse(result.contains("import org.junit.jupiter.api.Tag;"),
-            "Should not add specific Tag import when wildcard import exists");
-
-        // Verify wildcard import is preserved
-        assertTrue(result.contains("import org.junit.jupiter.api.*;"),
-            "Should preserve wildcard import");
-
-        // Verify annotation is before class declaration
-        int annotationIndex = result.indexOf("@Tag(\"unit\")");
-        int classIndex = result.indexOf("public class WildcardImportTest");
-        assertTrue(annotationIndex < classIndex,
-            "@Tag annotation should be before class declaration");
-
-        // Verify existing imports are preserved
-        assertTrue(result.contains("import java.util.List;"),
-            "Should preserve existing imports");
     }
 
     @Test
@@ -309,4 +141,300 @@ class JUnitTagsInsertionTest {
         boolean result3 = PathUtils.isEnd(exactPath, simpleExclude, srcPath);
         assertTrue(result3, "Should return true for file directly in excluded directory");
     }
+
+
+
+    @Test
+    void testModify_AddsImportAndTagAnnotation_WhenBothMissing() {
+        // Given
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            
+            public class TestClass {
+                public void testMethod() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "integration";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.SKIP);
+
+        // Then
+        assertTrue(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should add Tag import");
+        assertTrue(result.contains("@Tag(\"integration\")"),
+            "Should add @Tag annotation with correct tag value");
+        assertTrue(result.contains("import java.util.List;"),
+            "Should preserve existing imports");
+        assertTrue(result.contains("public class TestClass"),
+            "Should preserve class declaration");
+
+        // Verify import is in correct location (after existing imports)
+        int tagImportIndex = result.indexOf("import org.junit.jupiter.api.Tag;");
+        int listImportIndex = result.indexOf("import java.util.List;");
+        assertTrue(tagImportIndex > listImportIndex,
+            "Tag import should be after existing imports");
+
+        // Verify annotation is before class declaration
+        int annotationIndex = result.indexOf("@Tag(\"integration\")");
+        int classIndex = result.indexOf("public class TestClass");
+        assertTrue(annotationIndex < classIndex,
+            "@Tag annotation should be before class declaration");
+    }
+
+    @Test
+    void testModify_AddsOnlyTagAnnotation_WhenImportExists() {
+        // Given
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            import org.junit.jupiter.api.Tag;
+            import org.junit.jupiter.api.Test;
+            
+            public class ExistingImportTest {
+                @Test
+                public void someTest() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "unit";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.SKIP);
+
+        // Then
+        assertTrue(result.contains("@Tag(\"unit\")"),
+            "Should add @Tag annotation with correct tag value");
+
+        // Verify that Tag import appears only once
+        int firstImportIndex = result.indexOf("import org.junit.jupiter.api.Tag;");
+        int lastImportIndex = result.lastIndexOf("import org.junit.jupiter.api.Tag;");
+        assertEquals(firstImportIndex, lastImportIndex,
+            "Tag import should appear only once");
+
+        // Verify annotation is before class declaration
+        int annotationIndex = result.indexOf("@Tag(\"unit\")");
+        int classIndex = result.indexOf("public class ExistingImportTest");
+        assertTrue(annotationIndex < classIndex,
+            "@Tag annotation should be before class declaration");
+
+        // Verify existing imports are preserved
+        assertTrue(result.contains("import java.util.List;"),
+            "Should preserve existing imports");
+        assertTrue(result.contains("import org.junit.jupiter.api.Test;"),
+            "Should preserve existing imports");
+    }
+
+    @Test
+    void testModify_SkipsChanges_WhenTagExistsAndStrategyIsSkip() {
+        // Given
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            import org.junit.jupiter.api.Tag;
+            import org.junit.jupiter.api.Test;
+            
+            @Tag("existing")
+            public class AlreadyTaggedTest {
+                @Test
+                public void someTest() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "newTag";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.SKIP);
+
+        // Then
+        assertEquals(originalContent, result,
+            "Content should remain unchanged when import and @Tag annotation already exist and strategy is SKIP");
+
+        // Verify existing tag is preserved and new tag is not added
+        assertTrue(result.contains("@Tag(\"existing\")"),
+            "Should preserve existing @Tag annotation");
+        assertFalse(result.contains("@Tag(\"newTag\")"),
+            "Should not add new @Tag annotation when strategy is SKIP");
+    }
+
+    @Test
+    void testModify_ReplacesTag_WhenTagExistsAndStrategyIsReplace() {
+        // Given
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            import org.junit.jupiter.api.Tag;
+            import org.junit.jupiter.api.Test;
+            
+            @Tag("oldTag")
+            public class ReplaceTagTest {
+                @Test
+                public void someTest() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "newTag";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.REPLACE);
+
+        // Then
+        assertTrue(result.contains("@Tag(\"newTag\")"),
+            "Should replace existing @Tag with new tag value");
+        assertFalse(result.contains("@Tag(\"oldTag\")"),
+            "Should remove old @Tag annotation");
+
+        // Verify there's only one @Tag annotation
+        int firstTagIndex = result.indexOf("@Tag(");
+        int lastTagIndex = result.lastIndexOf("@Tag(");
+        assertEquals(firstTagIndex, lastTagIndex,
+            "Should have only one @Tag annotation after replacement");
+
+        // Verify existing imports are preserved
+        assertTrue(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should preserve Tag import");
+        assertTrue(result.contains("import java.util.List;"),
+            "Should preserve existing imports");
+    }
+
+    @Test
+    void testModify_AddsSecondTag_WhenTagExistsAndStrategyIsAdd() {
+        // Given
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            import org.junit.jupiter.api.Tag;
+            import org.junit.jupiter.api.Test;
+            
+            @Tag("existing")
+            public class AddTagTest {
+                @Test
+                public void someTest() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "additional";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.ADD);
+
+        // Then
+        assertTrue(result.contains("@Tag(\"existing\")"),
+            "Should preserve existing @Tag annotation");
+        assertTrue(result.contains("@Tag(\"additional\")"),
+            "Should add new @Tag annotation");
+
+        // Verify both tags are present
+        int firstTagIndex = result.indexOf("@Tag(\"existing\")");
+        int secondTagIndex = result.indexOf("@Tag(\"additional\")");
+        assertTrue(firstTagIndex >= 0 && secondTagIndex >= 0,
+            "Both @Tag annotations should be present");
+        assertTrue(firstTagIndex < secondTagIndex,
+            "Original tag should come before new tag");
+
+        // Verify existing imports are preserved
+        assertTrue(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should preserve Tag import");
+        assertTrue(result.contains("import java.util.List;"),
+            "Should preserve existing imports");
+    }
+
+    @Test
+    void testModify_NoChanges_WhenFileIsNotClass() {
+        // Given - package-info.java content with no class declaration
+        String originalContent = """
+            @ParametersAreNonnullByDefault
+            package cons411.trafaret3;
+            
+            import javax.annotation.ParametersAreNonnullByDefault;
+            """;
+
+        String tag = "integration";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.SKIP);
+
+        // Then
+        assertEquals(originalContent, result,
+            "Content should remain unchanged when file contains no class declaration");
+
+        // Verify no Tag import was added
+        assertFalse(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should not add Tag import when file has no class declaration");
+
+        // Verify no @Tag annotation was added
+        assertFalse(result.contains("@Tag(\"integration\")"),
+            "Should not add @Tag annotation when file has no class declaration");
+
+        // Verify original content is preserved
+        assertTrue(result.contains("@ParametersAreNonnullByDefault"),
+            "Should preserve existing annotations");
+        assertTrue(result.contains("package cons411.trafaret3;"),
+            "Should preserve package declaration");
+        assertTrue(result.contains("import javax.annotation.ParametersAreNonnullByDefault;"),
+            "Should preserve existing imports");
+    }
+
+    @Test
+    void testModify_AddsOnlyTagAnnotation_WhenWildcardImportExists() {
+        // Given
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            import org.junit.jupiter.api.*;
+            
+            public class WildcardImportTest {
+                @Test
+                public void someTest() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "unit";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.SKIP);
+
+        // Then
+        assertTrue(result.contains("@Tag(\"unit\")"),
+            "Should add @Tag annotation with correct tag value");
+
+        // Verify that specific Tag import was NOT added (since wildcard covers it)
+        assertFalse(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should not add specific Tag import when wildcard import exists");
+
+        // Verify wildcard import is preserved
+        assertTrue(result.contains("import org.junit.jupiter.api.*;"),
+            "Should preserve wildcard import");
+
+        // Verify annotation is before class declaration
+        int annotationIndex = result.indexOf("@Tag(\"unit\")");
+        int classIndex = result.indexOf("public class WildcardImportTest");
+        assertTrue(annotationIndex < classIndex,
+            "@Tag annotation should be before class declaration");
+
+        // Verify existing imports are preserved
+        assertTrue(result.contains("import java.util.List;"),
+            "Should preserve existing imports");
+    }
+
 }
