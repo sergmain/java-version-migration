@@ -437,4 +437,150 @@ class JUnitTagsInsertionTest {
             "Should preserve existing imports");
     }
 
+    @Test
+    void testModify_FixesDanglingJavadoc_WhenStrategyIsCheck() {
+        // Given - content with @Tag import between Javadoc and class (creates dangling Javadoc)
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            import org.junit.jupiter.api.Test;
+            
+            /**
+             * This is a test class that demonstrates
+             * the dangling Javadoc issue.
+             */
+            import org.junit.jupiter.api.Tag;
+            
+            @Tag("integration")
+            public class DanglingJavadocTest {
+                @Test
+                public void someTest() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "unit";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.CHECK);
+
+        // Then
+        // Verify that @Tag import was moved before the Javadoc
+        assertTrue(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should preserve Tag import");
+        
+        int tagImportIndex = result.indexOf("import org.junit.jupiter.api.Tag;");
+        int javadocIndex = result.indexOf("/**");
+        
+        assertTrue(tagImportIndex < javadocIndex,
+            "@Tag import should be moved before Javadoc comment");
+
+        // Verify Javadoc is now properly attached to class
+        int classIndex = result.indexOf("public class DanglingJavadocTest");
+        assertTrue(javadocIndex < classIndex,
+            "Javadoc should come before class declaration");
+
+        // Verify no import is between Javadoc and class anymore
+        String betweenJavadocAndClass = result.substring(result.indexOf("*/") + 2, classIndex);
+        assertFalse(betweenJavadocAndClass.contains("import"),
+            "No import should be between Javadoc and class declaration");
+
+        // Verify existing @Tag annotation is preserved
+        assertTrue(result.contains("@Tag(\"integration\")"),
+            "Should preserve existing @Tag annotation");
+
+        // Verify no duplicate @Tag is added since one already exists
+        assertFalse(result.contains("@Tag(\"unit\")"),
+            "Should not add new @Tag when existing one is present and CHECK strategy is used");
+    }
+
+    @Test
+    void testDetectDanglingJavadocIssues_DetectsIssues() {
+        // Given
+        String contentWithDanglingJavadoc = """
+            package com.example.test;
+            
+            /**
+             * This Javadoc is dangling because it's followed by an import
+             */
+            import org.junit.jupiter.api.Tag;
+            
+            public class TestClass {
+            }
+            """;
+
+        // When
+        List<String> issues = detectDanglingJavadocIssues(contentWithDanglingJavadoc);
+
+        // Then
+        assertEquals(1, issues.size(), "Should detect one dangling Javadoc issue");
+        assertTrue(issues.get(0).contains("Dangling Javadoc"),
+            "Issue description should mention dangling Javadoc");
+        assertTrue(issues.get(0).contains("followed by import statement"),
+            "Issue description should mention import statement problem");
+    }
+
+    @Test
+    void testDetectDanglingJavadocIssues_NoIssuesWhenProperlyAttached() {
+        // Given
+        String contentWithProperJavadoc = """
+            package com.example.test;
+            
+            import org.junit.jupiter.api.Tag;
+            
+            /**
+             * This Javadoc is properly attached to the class
+             */
+            public class TestClass {
+            }
+            """;
+
+        // When
+        List<String> issues = detectDanglingJavadocIssues(contentWithProperJavadoc);
+
+        // Then
+        assertEquals(0, issues.size(), "Should not detect any dangling Javadoc issues");
+    }
+
+    @Test
+    void testModify_NoChanges_WhenCheckStrategyAndNoJavadocIssues() {
+        // Given - content with proper structure (no dangling Javadoc)
+        String originalContent = """
+            package com.example.test;
+            
+            import java.util.List;
+            import org.junit.jupiter.api.Tag;
+            import org.junit.jupiter.api.Test;
+            
+            /**
+             * This is properly attached Javadoc
+             */
+            @Tag("integration")
+            public class ProperStructureTest {
+                @Test
+                public void someTest() {
+                    // test implementation
+                }
+            }
+            """;
+
+        String tag = "unit";
+
+        // When
+        String result = modify(originalContent, tag, ExistTagStrategy.CHECK);
+
+        // Then
+        // Content should remain mostly unchanged (except for whitespace normalization)
+        assertTrue(result.contains("import org.junit.jupiter.api.Tag;"),
+            "Should preserve Tag import");
+        assertTrue(result.contains("@Tag(\"integration\")"),
+            "Should preserve existing @Tag annotation");
+        assertTrue(result.contains("This is properly attached Javadoc"),
+            "Should preserve Javadoc content");
+        assertFalse(result.contains("@Tag(\"unit\")"),
+            "Should not add new @Tag when existing one is present");
+    }
+
 }

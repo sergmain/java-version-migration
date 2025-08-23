@@ -8,5 +8,10 @@ migration:
     metas:
 #        - migrateSynchronizedLocker: StampedLock
 #        - migrateSynchronizedLocker: ReentrantReadWriteLock
-        - junitTagsName: common
+        - junitTagsName: "common"
         - junitTagsExcludePackages:
+#        - junitTagsStrategy: add
+#        - junitTagsStrategy: skip
+#        - junitTagsStrategy: check
+        - junitTagsStrategy: replace
+        - junitSrcBase: src\test\java

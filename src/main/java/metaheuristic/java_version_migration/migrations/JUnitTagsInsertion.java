@@ -125,7 +125,8 @@ public class JUnitTagsInsertion {
     public enum ExistTagStrategy {
         ADD(AddTagStrategy::handleExistingTag),
         SKIP(SkipTagStrategy::handleExistingTag),
-        REPLACE(ReplaceTagStrategy::handleExistingTag);
+        REPLACE(ReplaceTagStrategy::handleExistingTag),
+        CHECK(CheckTagStrategy::handleExistingTag);  // New CHECK strategy for dangling Javadoc fixes
 
         private final TagStrategy strategy;
 
@@ -174,7 +175,26 @@ public class JUnitTagsInsertion {
         }
     }
 
+    // CHECK strategy - fixes dangling Javadoc and import placement issues
+    static class CheckTagStrategy {
+        public static String handleExistingTag(String content, String tag, String existingTag) {
+            String result = content;
+            
+            // Check and fix dangling Javadoc issues caused by @Tag imports
+            result = checkAndFixTagImportPlacement(result);
+            
+            return result;
+        }
+    }
+
     public static String modify(String content, String tag, ExistTagStrategy existTagStrategy) {
+        // Special handling for CHECK strategy - it needs to run first regardless of existing annotations
+        if (existTagStrategy == ExistTagStrategy.CHECK) {
+            // Always apply CHECK strategy to fix placement issues
+            String checkedContent = CheckTagStrategy.handleExistingTag(content, tag, null);
+            return checkedContent; // Don't add new tags, just fix placement
+        }
+        
         return modify(content, tag, existTagStrategy.getStrategy());
     }
 
@@ -184,6 +204,11 @@ public class JUnitTagsInsertion {
         // Check if file contains class declaration
         boolean hasClassDeclaration = hasClassDeclaration(content);
 
+        // If using CHECK strategy, apply it first to fix dangling Javadoc issues
+        if (strategy instanceof CheckTagStrategy) {
+            modifiedContent = CheckTagStrategy.handleExistingTag(modifiedContent, tag, null);
+        }
+
         // Only add import if file has class declaration and import doesn't already exist
         String importStatement = "import org.junit.jupiter.api.Tag;";
         if (hasClassDeclaration && !isTagImportPresent(content)) {
@@ -192,7 +217,10 @@ public class JUnitTagsInsertion {
 
         // Handle @Tag annotation based on strategy (only for classes)
         if (hasClassDeclaration) {
-            modifiedContent = addTagAnnotation(modifiedContent, tag, strategy);
+            // Skip adding tag annotation for CHECK strategy unless no @Tag exists
+            if (!(strategy instanceof CheckTagStrategy) || !content.contains("@Tag(")) {
+                modifiedContent = addTagAnnotation(modifiedContent, tag, strategy);
+            }
         }
 
         return modifiedContent;
@@ -317,6 +345,261 @@ public class JUnitTagsInsertion {
 
         // If no class declaration found, return original content
         return content;
+    }
+
+    /**
+     * Information about class-level Javadoc location
+     */
+    private static class ClassJavadocInfo {
+        private final int startPosition;
+        private final int endPosition;
+        private final String javadocContent;
+        private final int classDeclarationStart;
+        
+        public ClassJavadocInfo(int startPosition, int endPosition, String javadocContent, int classDeclarationStart) {
+            this.startPosition = startPosition;
+            this.endPosition = endPosition;
+            this.javadocContent = javadocContent;
+            this.classDeclarationStart = classDeclarationStart;
+        }
+        
+        public int getStartPosition() { return startPosition; }
+        public int getEndPosition() { return endPosition; }
+        public String getJavadocContent() { return javadocContent; }
+        public int getClassDeclarationStart() { return classDeclarationStart; }
+    }
+    
+    /**
+     * Check and fix @Tag import placement to prevent dangling Javadoc comments
+     * Ensures @Tag imports are placed before class-level Javadoc
+     */
+    private static String checkAndFixTagImportPlacement(String content) {
+        // Find @Tag import
+        String tagImportPattern = "import\\s+org\\.junit\\.jupiter\\.api\\.Tag\\s*;";
+        Pattern tagPattern = Pattern.compile(tagImportPattern);
+        Matcher tagMatcher = tagPattern.matcher(content);
+        
+        if (!tagMatcher.find()) {
+            return content; // No @Tag import found
+        }
+        
+        String tagImportStatement = tagMatcher.group().trim();
+        
+        // Find class-level Javadoc
+        ClassJavadocInfo javadocInfo = findClassLevelJavadoc(content);
+        if (javadocInfo == null) {
+            return content; // No class-level Javadoc found
+        }
+        
+        // Check if @Tag import is after Javadoc start (which creates dangling Javadoc)
+        int tagImportPosition = tagMatcher.start();
+        int javadocPosition = javadocInfo.getStartPosition();
+        
+        if (tagImportPosition > javadocPosition) {
+            // @Tag import is after Javadoc start - this creates dangling Javadoc
+            // Remove the existing @Tag import from its current position
+            String contentWithoutTagImport = content.substring(0, tagMatcher.start()) + 
+                                             content.substring(tagMatcher.end());
+            
+            // Find appropriate place to insert @Tag import before Javadoc
+            String beforeJavadoc = contentWithoutTagImport.substring(0, javadocInfo.getStartPosition());
+            String afterJavadoc = contentWithoutTagImport.substring(javadocInfo.getStartPosition());
+            
+            // Find the best insertion point for the import
+            String insertionPoint = findTagImportInsertionPoint(beforeJavadoc);
+            String remainingBefore = beforeJavadoc.substring(insertionPoint.length());
+            
+            // Reconstruct the content with proper import placement
+            StringBuilder result = new StringBuilder();
+            result.append(insertionPoint);
+            
+            if (!insertionPoint.isEmpty() && !insertionPoint.endsWith("\n")) {
+                result.append("\n");
+            }
+            result.append(tagImportStatement).append("\n");
+            
+            if (!remainingBefore.trim().isEmpty()) {
+                if (!remainingBefore.startsWith("\n")) {
+                    result.append("\n");
+                }
+                result.append(remainingBefore);
+            }
+            
+            result.append(afterJavadoc);
+            
+            return result.toString();
+        }
+        
+        return content; // Import placement is already correct
+    }
+    
+    /**
+     * Find class-level Javadoc comment
+     */
+    private static ClassJavadocInfo findClassLevelJavadoc(String content) {
+        // First find all Javadoc comments so we can exclude class matches inside them
+        java.util.List<int[]> javadocRanges = new java.util.ArrayList<>();
+        Pattern javadocPattern = Pattern.compile("/\\*\\*([\\s\\S]*?)\\*/", Pattern.MULTILINE | Pattern.DOTALL);
+        Matcher javadocMatcher = javadocPattern.matcher(content);
+        
+        while (javadocMatcher.find()) {
+            javadocRanges.add(new int[]{javadocMatcher.start(), javadocMatcher.end()});
+        }
+        
+        // Then find class declaration that's NOT inside any Javadoc comment
+        Pattern classPattern = Pattern.compile(
+            "((?:(?:@\\w+(?:\\([^)]*\\))?\\s*)*)?(?:public|private|protected)?\\s*(?:abstract|final)?\\s*class\\s+\\w+)",
+            Pattern.MULTILINE
+        );
+        Matcher classMatcher = classPattern.matcher(content);
+        
+        int classStart = -1;
+        while (classMatcher.find()) {
+            int candidateClassStart = classMatcher.start();
+            
+            // Check if this class declaration is inside any Javadoc
+            boolean insideJavadoc = false;
+            for (int[] range : javadocRanges) {
+                if (candidateClassStart >= range[0] && candidateClassStart <= range[1]) {
+                    insideJavadoc = true;
+                    break;
+                }
+            }
+            
+            if (!insideJavadoc) {
+                classStart = candidateClassStart;
+                break; // Take the first valid class declaration
+            }
+        }
+        
+        if (classStart == -1) {
+            return null; // No class declaration found
+        }
+        
+        // Now find the Javadoc comment that comes before this class
+        ClassJavadocInfo bestMatch = null;
+        javadocMatcher.reset(); // Reset for reuse
+        
+        while (javadocMatcher.find()) {
+            int javadocStart = javadocMatcher.start();
+            int javadocEnd = javadocMatcher.end();
+            
+            if (javadocEnd < classStart) {
+                // This Javadoc comes before the class, check if it's likely the class-level Javadoc
+                String betweenJavadocAndClass = content.substring(javadocEnd, classStart);
+                
+                if (javadocEnd < classStart) {
+                    // It's class-level Javadoc if the content between contains only:
+                    // - whitespace, imports, and annotations
+                    boolean isClassJavadoc = betweenJavadocAndClass.matches("(?s)\\s*(?:import\\s+[^;]+;\\s*|@\\w+(?:\\([^)]*\\))?\\s*)*");
+                    
+                    if (isClassJavadoc) {
+                        String javadocContent = javadocMatcher.group(1);
+                        bestMatch = new ClassJavadocInfo(javadocStart, javadocEnd, javadocContent, classStart);
+                        // Keep looking for a later Javadoc that's closer to the class
+                    }
+                }
+            }
+        }
+        
+        return bestMatch;
+    }
+    
+    /**
+     * Fix dangling Javadoc caused by @Tag import placement
+     */
+    private static String fixDanglingJavadocFromTagImport(String content, String tagImportStatement, ClassJavadocInfo javadocInfo) {
+        StringBuilder result = new StringBuilder();
+        
+        // Get content before Javadoc
+        String beforeJavadoc = content.substring(0, javadocInfo.getStartPosition());
+        
+        // Get content after class declaration
+        String afterClassDeclaration = content.substring(javadocInfo.getClassDeclarationStart());
+        
+        // Get the Javadoc and class declaration (without the misplaced @Tag import)
+        String javadocAndClass = content.substring(javadocInfo.getStartPosition(), javadocInfo.getClassDeclarationStart());
+        
+        // Remove @Tag import from the middle section
+        javadocAndClass = javadocAndClass.replaceAll("\\s*import\\s+org\\.junit\\.jupiter\\.api\\.Tag\\s*;\\s*", "");
+        
+        // Find appropriate place to insert @Tag import before Javadoc
+        String insertionPoint = findTagImportInsertionPoint(beforeJavadoc);
+        
+        // Reconstruct the content
+        result.append(insertionPoint);
+        if (!insertionPoint.endsWith("\n")) {
+            result.append("\n");
+        }
+        result.append(tagImportStatement);
+        result.append("\n");
+        
+        // Add remaining before-javadoc content (after the insertion point)
+        String remainingBeforeJavadoc = beforeJavadoc.substring(insertionPoint.length());
+        if (!remainingBeforeJavadoc.trim().isEmpty()) {
+            result.append(remainingBeforeJavadoc);
+            if (!remainingBeforeJavadoc.endsWith("\n")) {
+                result.append("\n");
+            }
+        }
+        
+        // Add Javadoc and class declaration
+        result.append(javadocAndClass);
+        
+        // Add the rest of the content
+        result.append(afterClassDeclaration);
+        
+        return result.toString();
+    }
+    
+    /**
+     * Find the appropriate insertion point for @Tag imports
+     */
+    private static String findTagImportInsertionPoint(String beforeJavadocContent) {
+        // Find the last import statement
+        Pattern lastImportPattern = Pattern.compile("(.*import\\s+[^;]+;)", Pattern.DOTALL);
+        Matcher matcher = lastImportPattern.matcher(beforeJavadocContent);
+        
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        
+        // If no imports found, find package declaration
+        Pattern packagePattern = Pattern.compile("(package\\s+[^;]+;)", Pattern.DOTALL);
+        matcher = packagePattern.matcher(beforeJavadocContent);
+        
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        
+        // If no package declaration, return beginning of content
+        return "";
+    }
+    
+    /**
+     * Check for dangling Javadoc issues in the content
+     */
+    public static java.util.List<String> detectDanglingJavadocIssues(String content) {
+        java.util.List<String> issues = new java.util.ArrayList<>();
+        
+        // Find all Javadoc comments
+        Pattern javadocPattern = Pattern.compile("/\\*\\*[\\s\\S]*?\\*/");
+        Matcher javadocMatcher = javadocPattern.matcher(content);
+        
+        while (javadocMatcher.find()) {
+            int javadocEnd = javadocMatcher.end();
+            
+            // Check what follows the Javadoc comment
+            String afterJavadoc = content.substring(javadocEnd).trim();
+            
+            // Check if it's followed by an import (which would make it dangling)
+            if (afterJavadoc.startsWith("import ")) {
+                issues.add("Dangling Javadoc at position " + javadocMatcher.start() + 
+                          " - followed by import statement instead of declaration");
+            }
+        }
+        
+        return issues;
     }
 
 
