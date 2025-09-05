@@ -18,10 +18,7 @@ package metaheuristic.java_version_migration;
 
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.data.Content;
-import metaheuristic.java_version_migration.migrations.CtFlexMigration;
-import metaheuristic.java_version_migration.migrations.JUnitTagsInsertion;
-import metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21;
-import metaheuristic.java_version_migration.migrations.RemoveDoubleLF;
+import metaheuristic.java_version_migration.migrations.*;
 
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -46,7 +43,8 @@ public class Migration {
 //                    MigrateSynchronizedJava21::process,
 //                    RemoveDoubleLF::process
 //                JUnitTagsInsertion::process
-                CtFlexMigration::process
+//                CtFlexMigration::process
+                AngularTemplateSeparationMigration::process
             )))
             .sorted(Comparator.comparingInt(MigrationFunctions::version)).toList();
 

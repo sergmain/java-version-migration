@@ -18,15 +18,17 @@ package metaheuristic.java_version_migration.migrations;
 
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.data.Content;
+import org.springframework.lang.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Migration tool to convert ct-flex elements to div elements with CSS classes
- * 
+ * Migration tool to convert Angular ct-flex components to div elements with CSS classes
+ *
  * @author Sergio Lissner
  * Date: 9/4/2025
  * Time: 4:57 PM
@@ -34,327 +36,468 @@ import java.util.regex.Pattern;
 public class CtFlexMigration {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
-        if (content == null) {
-            return new Content(null, false);
-        }
-        String newContent = processContent(content);
-        boolean changed = newContent != null && !newContent.equals(content);
-        return new Content(newContent != null ? newContent : content, changed);
-    }
-
-    public static String processContent(String content) {
-        if (content == null || content.trim().isEmpty()) {
-            return content;
-        }
-        
-        String result = content;
-        boolean hasChanges = true;
-        
-        // Keep processing until no more changes are made
-        while (hasChanges) {
-            String previousResult = result;
-            result = processCtFlexElements(result);
-            hasChanges = !result.equals(previousResult);
-        }
-        
+        String newContent = migrateCtFlexToDiv(content);
+        Content result = new Content(newContent, !newContent.equals(content));
         return result;
     }
-    
+
     /**
-     * Process ct-flex elements and convert them to div elements with CSS classes
+     * Main migration method that converts ct-flex components to div elements
+     * Uses a simpler approach that handles nesting reliably
      */
-    private static String processCtFlexElements(String content) {
-        // Pattern to match ct-flex elements
-        Pattern pattern = Pattern.compile(
-            "<ct-flex([^>]*?)>([\\s\\S]*?)</ct-flex>",
+    public static String migrateCtFlexToDiv(String content) {
+        String result = content;
+
+        // Keep processing until no more changes are made
+        boolean hasChanges = true;
+        while (hasChanges) {
+            String previousResult = result;
+
+            // First unwrap all ct-flex-item elements
+            result = processCtFlexItems(result);
+
+            // Then convert one level of ct-flex elements to div
+            result = processOneCtFlexLevel(result);
+
+            hasChanges = !result.equals(previousResult);
+        }
+
+        return result;
+    }
+
+    /**
+     * Process a single ct-flex element (the first one found)
+     */
+    private static String processOneCtFlexLevel(String content) {
+        // Simple pattern to match any ct-flex element
+        Pattern ctFlexPattern = Pattern.compile(
+            "<ct-flex([^>]*?)>(.*?)</ct-flex>",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
         );
-        
-        Matcher matcher = pattern.matcher(content);
-        
-        while (matcher.find()) {
+
+        Matcher matcher = ctFlexPattern.matcher(content);
+
+        if (matcher.find()) {
             String attributes = matcher.group(1);
             String innerContent = matcher.group(2);
-            String fullMatch = matcher.group(0);
-            
-            // Convert attributes to CSS classes
-            String cssClasses = convertAttributesToCssClasses(attributes);
-            
-            // Process inner ct-flex-item elements
-            String processedInnerContent = processCtFlexItems(innerContent);
-            
-            // Create the replacement div
-            String replacement = "<div class=\"" + cssClasses + "\">" + processedInnerContent + "</div>";
-            
-            // Replace the first match only
-            return content.substring(0, matcher.start()) + 
-                   replacement + 
+            String divElement = convertCtFlexToDiv(attributes, innerContent);
+
+            // Replace only the first match
+            return content.substring(0, matcher.start()) +
+                   divElement +
                    content.substring(matcher.end());
         }
-        
+
         return content; // No ct-flex elements found
     }
-    
     /**
-     * Convert ct-flex attributes to CSS classes
-     */
-    private static String convertAttributesToCssClasses(String attributes) {
-        List<String> cssClasses = new ArrayList<>();
-        cssClasses.add("flex"); // Base flex class
-        
-        if (attributes == null || attributes.trim().isEmpty()) {
-            return "flex";
-        }
-        
-        // Pattern to match attributes
-        Pattern attrPattern = Pattern.compile(
-            "([\\w-]+)\\s*=\\s*[\"']([^\"']*)[\"']",
-            Pattern.CASE_INSENSITIVE
-        );
-        
-        Matcher matcher = attrPattern.matcher(attributes);
-        
-        while (matcher.find()) {
-            String attrName = matcher.group(1);
-            String attrValue = matcher.group(2);
-            
-            // Convert known flex attributes to CSS classes
-            String cssClass = convertAttributeToCssClass(attrName, attrValue);
-            if (cssClass != null && !cssClass.isEmpty()) {
-                cssClasses.add(cssClass);
-            }
-        }
-        
-        return String.join(" ", cssClasses);
-    }
-    
-    /**
-     * Convert individual attribute to CSS class
-     */
-    private static String convertAttributeToCssClass(String attrName, String attrValue) {
-        // Handle known flex attributes
-        switch (attrName.toLowerCase()) {
-            case "justify-content":
-                return "justify-content-" + attrValue;
-            case "align-items":
-                return "align-items-" + attrValue;
-            case "align-content":
-                return "align-content-" + attrValue;
-            case "flex-direction":
-                return "flex-direction-" + attrValue;
-            case "flex-wrap":
-                return "flex-wrap-" + attrValue;
-            case "gap":
-                return "gap-" + attrValue;
-            default:
-                // For other attributes, create a generic CSS class
-                return attrName + "-" + attrValue;
-        }
-    }
-    
-    /**
-     * Process ct-flex-item elements and unwrap them while preserving flex attributes
+     * Process and unwrap ct-flex-item elements within a given content string
+     * Also handles ct-flex-item attributes by converting them to CSS classes on child elements
      */
     private static String processCtFlexItems(String content) {
-        if (content == null || content.trim().isEmpty()) {
-            return content;
-        }
-        
-        // Pattern to match ct-flex-item elements
-        Pattern pattern = Pattern.compile(
+        // Pattern to match ct-flex-item elements with their attributes and content
+        Pattern ctFlexItemPattern = Pattern.compile(
             "<ct-flex-item([^>]*?)>([\\s\\S]*?)</ct-flex-item>",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
         );
-        
+
+        Matcher matcher = ctFlexItemPattern.matcher(content);
         StringBuilder result = new StringBuilder();
         int lastEnd = 0;
-        
-        Matcher matcher = pattern.matcher(content);
-        
+
         while (matcher.find()) {
-            // Add content before this match
-            result.append(content.substring(lastEnd, matcher.start()));
-            
+            // Append content before this match
+            result.append(content, lastEnd, matcher.start());
+
+            // Extract attributes and inner content
             String attributes = matcher.group(1);
             String innerContent = matcher.group(2);
-            
+
             // Process the ct-flex-item
             String processedContent = processCtFlexItem(attributes, innerContent);
             result.append(processedContent);
-            
+
             lastEnd = matcher.end();
         }
-        
-        // Add remaining content
+
+        // Append remaining content
         result.append(content.substring(lastEnd));
-        
+
         return result.toString();
     }
-    
+
     /**
-     * Process individual ct-flex-item element
+     * Process a single ct-flex-item element with its attributes and content
      */
-    private static String processCtFlexItem(String attributes, String innerContent) {
-        if (innerContent == null || innerContent.trim().isEmpty()) {
-            return innerContent != null ? innerContent : "";
+    private static String processCtFlexItem(@Nullable String attributes, String innerContent) {
+        // Parse ct-flex-item attributes to extract CSS classes and Angular directives
+        AttributeInfo attributeInfo = parseCtFlexItemAttributes(attributes);
+
+        // Unwrap the content while preserving proper indentation
+        String unwrappedContent = unwrapFlexItemContent(innerContent);
+
+        // If there are CSS classes or Angular directives to apply, add them to the first child element
+        if (!attributeInfo.cssClasses.isEmpty() || !attributeInfo.angularDirectives.isEmpty()) {
+            unwrappedContent = addAttributesToFirstElement(unwrappedContent, attributeInfo);
         }
-        
-        // Extract flex-related attributes and Angular directives
-        FlexItemInfo flexInfo = extractFlexItemInfo(attributes);
-        
-        // Find the first child element to add classes to
-        String processedContent = addClassesToFirstChild(innerContent, flexInfo);
-        
-        return processedContent;
+
+        return unwrappedContent;
     }
-    
+
     /**
-     * Extract flex attributes and Angular directives from ct-flex-item
+     * Data class to hold parsed attribute information
      */
-    private static FlexItemInfo extractFlexItemInfo(String attributes) {
-        FlexItemInfo info = new FlexItemInfo();
-        
+    private static class AttributeInfo {
+        final List<String> cssClasses;
+        final List<String> angularDirectives;
+
+        AttributeInfo(List<String> cssClasses, List<String> angularDirectives) {
+            this.cssClasses = cssClasses;
+            this.angularDirectives = angularDirectives;
+        }
+    }
+
+    /**
+     * Parse ct-flex-item attributes and separate them into CSS classes and Angular directives
+     */
+    private static AttributeInfo parseCtFlexItemAttributes(@Nullable String attributes) {
+        List<String> cssClasses = new ArrayList<>();
+        List<String> angularDirectives = new ArrayList<>();
+
         if (attributes == null || attributes.trim().isEmpty()) {
-            return info;
+            return new AttributeInfo(cssClasses, angularDirectives);
         }
-        
-        // Pattern to match all attributes (both regular and Angular directives)
-        Pattern attrPattern = Pattern.compile(
-            "(\\*?[\\w.-]+)\\s*=\\s*[\"']([^\"']*(?:[\\r\\n][^\"']*)*)[\"']|" +
-            "(\\*?[\\w.-]+)(?=\\s|$)", // Attributes without values
+
+        // Pattern to match attribute="value" pairs, including multi-line values
+        // Updated to handle Angular directives that start with special characters like [ ( *
+        Pattern attributePattern = Pattern.compile(
+            "([\\*\\[\\(]?[\\w-]+[\\]\\)]?)\\s*=\\s*[\"']([^\"']*(?:\\s*[\\r\\n]\\s*[^\"']*)*)[\"']",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
         );
-        
-        Matcher matcher = attrPattern.matcher(attributes);
-        
+
+        Matcher matcher = attributePattern.matcher(attributes);
+
         while (matcher.find()) {
-            String attrName = matcher.group(1) != null ? matcher.group(1) : matcher.group(3);
+            String attrName = matcher.group(1);
             String attrValue = matcher.group(2);
-            
-            if (attrName.startsWith("*") || attrName.startsWith("[") || attrName.startsWith("(") || 
-                attrName.equals("routerLink") || attrName.equals("routerLinkActive")) {
-                // Angular directive or binding
-                if (attrValue != null) {
-                    String cleanValue = attrValue.replaceAll("\\s+", " ").trim();
-                    info.angularDirectives.add(attrName + "=\"" + cleanValue + "\"");
-                } else {
-                    info.angularDirectives.add(attrName);
-                }
-            } else if (attrName.startsWith("flex")) {
-                // Flex-related attribute
-                String cssClass = convertFlexAttributeToCssClass(attrName, attrValue);
-                if (cssClass != null) {
-                    info.flexClasses.add(cssClass);
+
+            if (isAngularDirective(attrName)) {
+                // Angular directive - add as-is
+                String directive = attrName + "=\"" + attrValue + "\"";
+                angularDirectives.add(directive);
+            } else {
+                // Check if it's a flex-related attribute
+                String cssClass = convertCtFlexItemAttributeToCssClass(attrName, attrValue);
+                if (!cssClass.isEmpty()) {
+                    cssClasses.add(cssClass);
                 }
             }
         }
-        
-        return info;
+
+        return new AttributeInfo(cssClasses, angularDirectives);
     }
-    
+
     /**
-     * Convert flex attributes to CSS classes
+     * Check if an attribute is an Angular directive
      */
-    private static String convertFlexAttributeToCssClass(String attrName, String attrValue) {
-        if (attrValue == null || attrValue.trim().isEmpty()) {
-            return null;
+    private static boolean isAngularDirective(@Nullable String attributeName) {
+        if (attributeName == null) {
+            return false;
         }
-        
-        switch (attrName.toLowerCase()) {
-            case "flex":
-                return "flex-" + attrValue;
-            case "flex-grow":
-                return "flex-grow-" + attrValue;
-            case "flex-shrink":
-                return "flex-shrink-" + attrValue;
-            case "flex-basis":
-                return "flex-basis-" + attrValue;
-            default:
-                return null;
+
+        String normalizedName = attributeName.toLowerCase().trim();
+
+        // Angular structural directives (start with *)
+        if (normalizedName.startsWith("*")) {
+            return true;
         }
+
+        // Angular property bindings (start with [ and end with ])
+        if (normalizedName.startsWith("[") && normalizedName.endsWith("]")) {
+            return true;
+        }
+
+        // Angular event bindings (start with ( and end with ))
+        if (normalizedName.startsWith("(") && normalizedName.endsWith(")")) {
+            return true;
+        }
+
+        // Other common Angular directives and attributes
+        return normalizedName.equals("routerlink") ||
+               normalizedName.equals("routerlinkactive") ||
+               normalizedName.equals("mattooltip") ||
+               normalizedName.startsWith("mat-") ||
+               normalizedName.startsWith("ng-");
     }
-    
+
     /**
-     * Add classes and directives to the first child element
+     * Convert ct-flex-item attribute to CSS class name
      */
-    private static String addClassesToFirstChild(String innerContent, FlexItemInfo flexInfo) {
-        if (flexInfo.flexClasses.isEmpty() && flexInfo.angularDirectives.isEmpty()) {
-            return innerContent;
+    private static String convertCtFlexItemAttributeToCssClass(@Nullable String attributeName, @Nullable String attributeValue) {
+        if (attributeName == null || attributeValue == null) {
+            return "";
         }
-        
-        // Pattern to find the first HTML element
-        Pattern elementPattern = Pattern.compile(
-            "<([^\\s/>]+)([^>]*?)(/?)>",
-            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-        );
-        
-        Matcher matcher = elementPattern.matcher(innerContent.trim());
-        
-        if (matcher.find()) {
-            String tagName = matcher.group(1);
-            String existingAttrs = matcher.group(2);
-            String closingSlash = matcher.group(3);
-            
-            // Build new attributes
-            StringBuilder newAttrs = new StringBuilder(existingAttrs);
-            
-            // Add flex classes to existing class attribute or create new one
-            if (!flexInfo.flexClasses.isEmpty()) {
-                String flexClassesStr = String.join(" ", flexInfo.flexClasses);
-                newAttrs = addOrUpdateClassAttribute(newAttrs, flexClassesStr);
-            }
-            
-            // Add Angular directives
-            for (String directive : flexInfo.angularDirectives) {
-                newAttrs.append(" ").append(directive);
-            }
-            
-            // Replace the opening tag
-            String newOpeningTag = "<" + tagName + newAttrs + closingSlash + ">";
-            
-            return innerContent.substring(0, matcher.start()) + 
-                   newOpeningTag + 
-                   innerContent.substring(matcher.end());
-        } else {
-            // If no HTML element found, just return the content as is
-            return innerContent;
-        }
+
+        String normalizedAttrName = attributeName.toLowerCase().trim();
+        String normalizedAttrValue = attributeValue.trim();
+
+        return switch (normalizedAttrName) {
+            case "flex" -> "flex-" + normalizedAttrValue;
+            case "flex-shrink" -> "flex-shrink-" + normalizedAttrValue;
+            case "flex-grow" -> "flex-grow-" + normalizedAttrValue;
+            case "flex-basis" -> "flex-basis-" + normalizedAttrValue;
+            default -> ""; // Ignore other attributes
+        };
     }
-    
+
     /**
-     * Add or update the class attribute
+     * Add CSS classes and Angular directives to the first HTML element found in the content
      */
-    private static StringBuilder addOrUpdateClassAttribute(StringBuilder attrs, String newClasses) {
-        String attrsStr = attrs.toString();
-        
-        // Pattern to find existing class attribute
-        Pattern classPattern = Pattern.compile(
-            "\\bclass\\s*=\\s*[\"']([^\"']*)[\"']",
+    private static String addAttributesToFirstElement(String content, AttributeInfo attributeInfo) {
+        if ((attributeInfo.cssClasses.isEmpty() && attributeInfo.angularDirectives.isEmpty()) || content.trim().isEmpty()) {
+            return content;
+        }
+
+        // Pattern to match the first HTML element (opening tag)
+        Pattern firstElementPattern = Pattern.compile(
+            "(<[a-zA-Z][^>]*?)(/?>)",
             Pattern.CASE_INSENSITIVE
         );
-        
-        Matcher matcher = classPattern.matcher(attrsStr);
-        
+
+        Matcher matcher = firstElementPattern.matcher(content);
+
         if (matcher.find()) {
-            // Update existing class attribute
-            String existingClasses = matcher.group(1);
-            String updatedClasses = existingClasses.trim() + " " + newClasses;
-            String replacement = "class=\"" + updatedClasses + "\"";
-            
-            return new StringBuilder(attrsStr.substring(0, matcher.start()) + 
-                                   replacement + 
-                                   attrsStr.substring(matcher.end()));
+            String beforeClosing = matcher.group(1);
+            String closing = matcher.group(2);
+
+            // Add CSS classes if any
+            String modifiedElement = beforeClosing;
+            if (!attributeInfo.cssClasses.isEmpty()) {
+                modifiedElement = addCssClasses(modifiedElement, attributeInfo.cssClasses);
+            }
+
+            // Add Angular directives if any
+            if (!attributeInfo.angularDirectives.isEmpty()) {
+                modifiedElement = addAngularDirectives(modifiedElement, attributeInfo.angularDirectives);
+            }
+
+            return content.substring(0, matcher.start()) +
+                   modifiedElement + closing +
+                   content.substring(matcher.end());
+        }
+
+        // If no HTML element found, return original content
+        return content;
+    }
+
+    /**
+     * Add CSS classes to an element string
+     */
+    private static String addCssClasses(String elementString, List<String> cssClasses) {
+        // Check if element already has a class attribute
+        Pattern classPattern = Pattern.compile(
+            "(.*?)(\\s+class\\s*=\\s*[\"']([^\"']*)[\"'])(.*)",
+            Pattern.CASE_INSENSITIVE
+        );
+
+        Matcher matcher = classPattern.matcher(elementString);
+
+        if (matcher.find()) {
+            // Element already has a class attribute
+            String before = matcher.group(1);
+            String existingClasses = matcher.group(3);
+            String after = matcher.group(4);
+
+            // Combine existing classes with new CSS classes
+            String combinedClasses = combineClasses(existingClasses, cssClasses);
+
+            return before + " class=\"" + combinedClasses + "\"" + after;
         } else {
-            // Add new class attribute
-            return attrs.append(" class=\"").append(newClasses).append("\"");
+            // Element doesn't have a class attribute, add one
+            String newClasses = String.join(" ", cssClasses);
+            return elementString + " class=\"" + newClasses + "\"";
         }
     }
-    
+
     /**
-     * Helper class to store flex item information
+     * Add Angular directives to an element string
      */
-    private static class FlexItemInfo {
-        List<String> flexClasses = new ArrayList<>();
-        List<String> angularDirectives = new ArrayList<>();
+    private static String addAngularDirectives(String elementString, List<String> angularDirectives) {
+        String result = elementString;
+
+        for (String directive : angularDirectives) {
+            result += " " + directive;
+        }
+
+        return result;
+    }
+
+    /**
+     * Combine existing CSS classes with new flex classes
+     */
+    private static String combineClasses(@Nullable String existingClasses, List<String> newClasses) {
+        List<String> allClasses = new ArrayList<>();
+
+        // Add existing classes
+        if (existingClasses != null && !existingClasses.trim().isEmpty()) {
+            String[] existing = existingClasses.trim().split("\\s+");
+            allClasses.addAll(Arrays.asList(existing));
+        }
+
+        // Add new classes (avoid duplicates)
+        for (String newClass : newClasses) {
+            if (!allClasses.contains(newClass)) {
+                allClasses.add(newClass);
+            }
+        }
+
+        return String.join(" ", allClasses);
+    }
+
+    /**
+     * Unwrap ct-flex-item content while preserving proper indentation
+     */
+    private static String unwrapFlexItemContent(String innerContent) {
+        if (innerContent.trim().isEmpty()) {
+            return "";
+        }
+
+        // Split into lines to handle indentation properly
+        String[] lines = innerContent.split("\n");
+        StringBuilder result = new StringBuilder();
+
+        // Skip leading empty lines
+        int startIndex = 0;
+        while (startIndex < lines.length && lines[startIndex].trim().isEmpty()) {
+            startIndex++;
+        }
+
+        // Skip trailing empty lines
+        int endIndex = lines.length - 1;
+        while (endIndex >= startIndex && lines[endIndex].trim().isEmpty()) {
+            endIndex--;
+        }
+
+        // Process remaining lines
+        if (startIndex <= endIndex) {
+            // Find minimum indentation (excluding empty lines)
+            int minIndent = Integer.MAX_VALUE;
+            for (int i = startIndex; i <= endIndex; i++) {
+                String line = lines[i];
+                if (!line.trim().isEmpty()) {
+                    int indent = getIndentationLevel(line);
+                    minIndent = Math.min(minIndent, indent);
+                }
+            }
+
+            // Remove common indentation and build result
+            for (int i = startIndex; i <= endIndex; i++) {
+                String line = lines[i];
+                if (line.trim().isEmpty()) {
+                    result.append("\n");
+                } else {
+                    // Remove the minimum indentation
+                    if (line.length() > minIndent) {
+                        result.append(line.substring(minIndent));
+                    } else {
+                        result.append(line.trim());
+                    }
+                    if (i < endIndex) {
+                        result.append("\n");
+                    }
+                }
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Get the indentation level of a line (number of leading spaces)
+     */
+    private static int getIndentationLevel(String line) {
+        int count = 0;
+        for (char c : line.toCharArray()) {
+            if (c == ' ') {
+                count++;
+            } else if (c == '\t') {
+                count += 2; // Treat tab as 2 spaces
+            } else {
+                break;
+            }
+        }
+        return count;
+    }
+
+
+
+    /**
+     * Convert a single ct-flex element to div with appropriate CSS classes
+     */
+    private static String convertCtFlexToDiv(String attributes, String innerContent) {
+        List<String> cssClasses = new ArrayList<>();
+        cssClasses.add("flex"); // Base flex class
+
+        // Parse attributes and convert to CSS classes
+        if (!attributes.trim().isEmpty()) {
+            cssClasses.addAll(parseAttributesToCssClasses(attributes));
+        }
+
+        // Build the div element
+        return "<div class=\"" + String.join(" ", cssClasses) + "\">" +
+               innerContent +
+               "</div>";
+    }
+
+    /**
+     * Parse ct-flex attributes and convert them to CSS class names
+     */
+    private static List<String> parseAttributesToCssClasses(String attributes) {
+        List<String> cssClasses = new ArrayList<>();
+
+        // Pattern to match attribute="value" pairs
+        Pattern attributePattern = Pattern.compile(
+            "(\\w[\\w-]*?)\\s*=\\s*[\"']([^\"']*)[\"']",
+            Pattern.CASE_INSENSITIVE
+        );
+
+        Matcher matcher = attributePattern.matcher(attributes);
+
+        while (matcher.find()) {
+            String attrName = matcher.group(1);
+            String attrValue = matcher.group(2);
+
+            String cssClass = convertAttributeToCssClass(attrName, attrValue);
+            if (!cssClass.isEmpty()) {
+                cssClasses.add(cssClass);
+            }
+        }
+
+        return cssClasses;
+    }
+
+    /**
+     * Convert individual attribute to CSS class name
+     */
+    private static String convertAttributeToCssClass(String attributeName, String attributeValue) {
+        String normalizedAttrName = attributeName.toLowerCase().trim();
+        String normalizedAttrValue = attributeValue.trim();
+
+        return switch (normalizedAttrName) {
+            case "justify-content" -> "justify-content-" + normalizedAttrValue;
+            case "align-items" -> "align-items-" + normalizedAttrValue;
+            case "gap" -> "gap-" + normalizedAttrValue;
+            case "flex-direction" -> "flex-direction-" + normalizedAttrValue;
+            case "flex-wrap" -> "flex-wrap-" + normalizedAttrValue;
+            case "align-content" -> "align-content-" + normalizedAttrValue;
+            default -> normalizedAttrName + "-" + normalizedAttrValue;
+        };
+    }
+
+    /**
+     * Utility method for testing - processes content with default configuration
+     */
+    public static String processContent(String content) {
+        return migrateCtFlexToDiv(content);
     }
 }
