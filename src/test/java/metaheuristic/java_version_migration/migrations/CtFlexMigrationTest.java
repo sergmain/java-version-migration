@@ -590,6 +590,166 @@ class CtFlexMigrationTest {
     }
 
     @Test
+    @DisplayName("Should handle ct-flex-item with Angular *ngIf directive")
+    void testCtFlexItemWithNgIfDirective() {
+        // Given
+        String input = """
+            <ct-flex justify-content="space-between">
+              <ct-flex-item flex="1" *ngIf="serverReady()">
+                <login-view></login-view>
+              </ct-flex-item>
+            </ct-flex>
+            """;
+
+        String expected = """
+            <div class="flex justify-content-space-between">
+              <login-view class="flex-1" *ngIf="serverReady()"></login-view>
+            </div>
+            """;
+
+        // When
+        String result = processContent(input);
+
+        // Then
+        assertEquals(normalizeWhitespace(expected), normalizeWhitespace(result),
+            "Should move Angular *ngIf directive to child element along with flex class");
+    }
+
+    @Test
+    @DisplayName("Should handle ct-flex-item with complex multi-line Angular directive")
+    void testCtFlexItemWithComplexAngularDirective() {
+        // Given
+        String input = """
+            <ct-flex justify-content="flex-end">
+              <ct-flex-item *ngIf="
+                      false && (isRole.Admin ||
+                      isRole.Data ||
+                      isRole.Manager) ">
+                <button class="mat-button mat-button--menu-item" mat-button routerLinkActive="active" routerLink="/ai">{{ 'app-view.Ai' | translate }}</button>
+              </ct-flex-item>
+            </ct-flex>
+            """;
+
+        String expected = """
+            <div class="flex justify-content-flex-end">
+              <button class="mat-button mat-button--menu-item" mat-button routerLinkActive="active" routerLink="/ai" *ngIf="
+                      false && (isRole.Admin ||
+                      isRole.Data ||
+                      isRole.Manager) ">{{ 'app-view.Ai' | translate }}</button>
+            </div>
+            """;
+
+        // When
+        String result = processContent(input);
+
+        // Then
+        assertEquals(normalizeWhitespace(expected), normalizeWhitespace(result),
+            "Should handle complex multi-line Angular directives correctly");
+    }
+
+    @Test
+    @DisplayName("Should handle ct-flex-item with multiple Angular directives")
+    void testCtFlexItemWithMultipleAngularDirectives() {
+        // Given
+        String input = """
+            <ct-flex justify-content="center">
+              <ct-flex-item flex="2" *ngIf="isVisible" *ngFor="let item of items">
+                <div class="content">{{item.name}}</div>
+              </ct-flex-item>
+            </ct-flex>
+            """;
+
+        String expected = """
+            <div class="flex justify-content-center">
+              <div class="content flex-2" *ngIf="isVisible" *ngFor="let item of items">{{item.name}}</div>
+            </div>
+            """;
+
+        // When
+        String result = processContent(input);
+
+        // Then
+        assertEquals(normalizeWhitespace(expected), normalizeWhitespace(result),
+            "Should handle multiple Angular directives and flex attributes together");
+    }
+
+    @Test
+    @DisplayName("Should handle ct-flex-item with Angular property and event bindings")
+    void testCtFlexItemWithAngularBindings() {
+        // Given
+        String input = """
+            <ct-flex justify-content="flex-start" gap="16px">
+              <ct-flex-item flex="1" [disabled]="isLoading" (click)="handleClick()">
+                <button mat-flat-button>Click Me</button>
+              </ct-flex-item>
+            </ct-flex>
+            """;
+
+        // When
+        String result = processContent(input);
+
+        // Verify the key functionality works correctly
+        assertTrue(result.contains("class=\"flex-1\""), "Should contain flex-1 class");
+        assertTrue(result.contains("[disabled]=\"isLoading\""), "Should contain disabled binding");
+        assertTrue(result.contains("(click)=\"handleClick()\""), "Should contain click binding");
+        assertTrue(result.contains("mat-flat-button"), "Should contain mat-flat-button");
+        assertFalse(result.contains("ct-flex-item"), "Should not contain ct-flex-item");
+        assertTrue(result.contains("<div class=\"flex justify-content-flex-start gap-16px\">"), "Should convert ct-flex correctly");
+    }
+
+    @Test
+    @DisplayName("Should handle ct-flex-item with Angular router directives")
+    void testCtFlexItemWithRouterDirectives() {
+        // Given
+        String input = """
+            <ct-flex justify-content="space-around">
+              <ct-flex-item routerLink="/dashboard" routerLinkActive="active">
+                <a class="nav-link">Dashboard</a>
+              </ct-flex-item>
+            </ct-flex>
+            """;
+
+        String expected = """
+            <div class="flex justify-content-space-around">
+              <a class="nav-link" routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+            </div>
+            """;
+
+        // When
+        String result = processContent(input);
+
+        // Then
+        assertEquals(normalizeWhitespace(expected), normalizeWhitespace(result),
+            "Should handle Angular router directives correctly");
+    }
+
+    @Test
+    @DisplayName("Should handle ct-flex-item with only Angular directives (no flex attributes)")
+    void testCtFlexItemWithOnlyAngularDirectives() {
+        // Given
+        String input = """
+            <ct-flex justify-content="center">
+              <ct-flex-item *ngIf="showButton">
+                <button mat-raised-button color="primary">Action</button>
+              </ct-flex-item>
+            </ct-flex>
+            """;
+
+        String expected = """
+            <div class="flex justify-content-center">
+              <button mat-raised-button color="primary" *ngIf="showButton">Action</button>
+            </div>
+            """;
+
+        // When
+        String result = processContent(input);
+
+        // Then
+        assertEquals(normalizeWhitespace(expected), normalizeWhitespace(result),
+            "Should handle ct-flex-item with only Angular directives (no flex attributes)");
+    }
+
+    @Test
     @DisplayName("Should not modify content without ct-flex elements")
     void testContentWithoutCtFlex() {
         // Given

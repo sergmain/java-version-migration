@@ -129,34 +129,49 @@ public class CtFlexMigration {
      * Process a single ct-flex-item element with its attributes and content
      */
     private static String processCtFlexItem(String attributes, String innerContent) {
-        // Parse ct-flex-item attributes to extract CSS classes
-        List<String> flexCssClasses = parseCtFlexItemAttributes(attributes);
+        // Parse ct-flex-item attributes to extract CSS classes and Angular directives
+        AttributeInfo attributeInfo = parseCtFlexItemAttributes(attributes);
         
         // Unwrap the content while preserving proper indentation
         String unwrappedContent = unwrapFlexItemContent(innerContent);
         
-        // If there are flex CSS classes to apply, add them to the first child element
-        if (!flexCssClasses.isEmpty()) {
-            unwrappedContent = addCssClassesToFirstElement(unwrappedContent, flexCssClasses);
+        // If there are CSS classes or Angular directives to apply, add them to the first child element
+        if (!attributeInfo.cssClasses.isEmpty() || !attributeInfo.angularDirectives.isEmpty()) {
+            unwrappedContent = addAttributesToFirstElement(unwrappedContent, attributeInfo);
         }
         
         return unwrappedContent;
     }
 
     /**
-     * Parse ct-flex-item attributes and convert them to CSS class names
+     * Data class to hold parsed attribute information
      */
-    private static List<String> parseCtFlexItemAttributes(String attributes) {
+    private static class AttributeInfo {
+        final List<String> cssClasses;
+        final List<String> angularDirectives;
+        
+        AttributeInfo(List<String> cssClasses, List<String> angularDirectives) {
+            this.cssClasses = cssClasses;
+            this.angularDirectives = angularDirectives;
+        }
+    }
+
+    /**
+     * Parse ct-flex-item attributes and separate them into CSS classes and Angular directives
+     */
+    private static AttributeInfo parseCtFlexItemAttributes(String attributes) {
         List<String> cssClasses = new ArrayList<>();
+        List<String> angularDirectives = new ArrayList<>();
         
         if (attributes == null || attributes.trim().isEmpty()) {
-            return cssClasses;
+            return new AttributeInfo(cssClasses, angularDirectives);
         }
         
-        // Pattern to match attribute="value" pairs
+        // Pattern to match attribute="value" pairs, including multi-line values
+        // Updated to handle Angular directives that start with special characters like [ ( *
         Pattern attributePattern = Pattern.compile(
-            "(\\w[\\w-]*?)\\s*=\\s*[\"']([^\"']*)[\"']",
-            Pattern.CASE_INSENSITIVE
+            "([\\*\\[\\(]?[\\w-]+[\\]\\)]?)\\s*=\\s*[\"']([^\"']*(?:\\s*[\\r\\n]\\s*[^\"']*)*)[\"']",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
         );
         
         Matcher matcher = attributePattern.matcher(attributes);
@@ -165,13 +180,53 @@ public class CtFlexMigration {
             String attrName = matcher.group(1);
             String attrValue = matcher.group(2);
             
-            String cssClass = convertCtFlexItemAttributeToCssClass(attrName, attrValue);
-            if (!cssClass.isEmpty()) {
-                cssClasses.add(cssClass);
+            if (isAngularDirective(attrName)) {
+                // Angular directive - add as-is
+                String directive = attrName + "=\"" + attrValue + "\"";
+                angularDirectives.add(directive);
+            } else {
+                // Check if it's a flex-related attribute
+                String cssClass = convertCtFlexItemAttributeToCssClass(attrName, attrValue);
+                if (!cssClass.isEmpty()) {
+                    cssClasses.add(cssClass);
+                }
             }
         }
         
-        return cssClasses;
+        return new AttributeInfo(cssClasses, angularDirectives);
+    }
+    
+    /**
+     * Check if an attribute is an Angular directive
+     */
+    private static boolean isAngularDirective(String attributeName) {
+        if (attributeName == null) {
+            return false;
+        }
+        
+        String normalizedName = attributeName.toLowerCase().trim();
+        
+        // Angular structural directives (start with *)
+        if (normalizedName.startsWith("*")) {
+            return true;
+        }
+        
+        // Angular property bindings (start with [ and end with ])
+        if (normalizedName.startsWith("[") && normalizedName.endsWith("]")) {
+            return true;
+        }
+        
+        // Angular event bindings (start with ( and end with ))
+        if (normalizedName.startsWith("(") && normalizedName.endsWith(")")) {
+            return true;
+        }
+        
+        // Other common Angular directives and attributes
+        return normalizedName.equals("routerlink") ||
+               normalizedName.equals("routerlinkactive") ||
+               normalizedName.equals("mattooltip") ||
+               normalizedName.startsWith("mat-") ||
+               normalizedName.startsWith("ng-");
     }
 
     /**
@@ -195,56 +250,86 @@ public class CtFlexMigration {
     }
 
     /**
-     * Add CSS classes to the first HTML element found in the content
+     * Add CSS classes and Angular directives to the first HTML element found in the content
      */
-    private static String addCssClassesToFirstElement(String content, List<String> cssClasses) {
-        if (cssClasses.isEmpty() || content == null || content.trim().isEmpty()) {
+    private static String addAttributesToFirstElement(String content, AttributeInfo attributeInfo) {
+        if ((attributeInfo.cssClasses.isEmpty() && attributeInfo.angularDirectives.isEmpty()) || 
+            content == null || content.trim().isEmpty()) {
             return content;
         }
         
         // Pattern to match the first HTML element (opening tag)
         Pattern firstElementPattern = Pattern.compile(
-            "(<[a-zA-Z][^>]*?)(\\s+class\\s*=\\s*[\"']([^\"']*)[\"'])([^>]*?>)",
+            "(<[a-zA-Z][^>]*?)(/?>)",
             Pattern.CASE_INSENSITIVE
         );
         
         Matcher matcher = firstElementPattern.matcher(content);
         
         if (matcher.find()) {
-            // Element already has a class attribute
-            String beforeClass = matcher.group(1);
-            String existingClasses = matcher.group(3);
-            String afterClass = matcher.group(4);
+            String beforeClosing = matcher.group(1);
+            String closing = matcher.group(2);
             
-            // Combine existing classes with new flex classes
-            String combinedClasses = combineClasses(existingClasses, cssClasses);
+            // Add CSS classes if any
+            String modifiedElement = beforeClosing;
+            if (!attributeInfo.cssClasses.isEmpty()) {
+                modifiedElement = addCssClasses(modifiedElement, attributeInfo.cssClasses);
+            }
+            
+            // Add Angular directives if any
+            if (!attributeInfo.angularDirectives.isEmpty()) {
+                modifiedElement = addAngularDirectives(modifiedElement, attributeInfo.angularDirectives);
+            }
             
             return content.substring(0, matcher.start()) + 
-                   beforeClass + " class=\"" + combinedClasses + "\"" + afterClass +
+                   modifiedElement + closing +
                    content.substring(matcher.end());
-        } else {
-            // Look for first element without class attribute
-            Pattern noClassElementPattern = Pattern.compile(
-                "(<[a-zA-Z][^>]*?)(/?>)",
-                Pattern.CASE_INSENSITIVE
-            );
-            
-            Matcher noClassMatcher = noClassElementPattern.matcher(content);
-            
-            if (noClassMatcher.find()) {
-                String beforeClosing = noClassMatcher.group(1);
-                String closing = noClassMatcher.group(2);
-                
-                String newClasses = String.join(" ", cssClasses);
-                
-                return content.substring(0, noClassMatcher.start()) + 
-                       beforeClosing + " class=\"" + newClasses + "\"" + closing +
-                       content.substring(noClassMatcher.end());
-            }
         }
         
         // If no HTML element found, return original content
         return content;
+    }
+    
+    /**
+     * Add CSS classes to an element string
+     */
+    private static String addCssClasses(String elementString, List<String> cssClasses) {
+        // Check if element already has a class attribute
+        Pattern classPattern = Pattern.compile(
+            "(.*?)(\\s+class\\s*=\\s*[\"']([^\"']*)[\"'])(.*)",
+            Pattern.CASE_INSENSITIVE
+        );
+        
+        Matcher matcher = classPattern.matcher(elementString);
+        
+        if (matcher.find()) {
+            // Element already has a class attribute
+            String before = matcher.group(1);
+            String existingClasses = matcher.group(3);
+            String after = matcher.group(4);
+            
+            // Combine existing classes with new CSS classes
+            String combinedClasses = combineClasses(existingClasses, cssClasses);
+            
+            return before + " class=\"" + combinedClasses + "\"" + after;
+        } else {
+            // Element doesn't have a class attribute, add one
+            String newClasses = String.join(" ", cssClasses);
+            return elementString + " class=\"" + newClasses + "\"";
+        }
+    }
+    
+    /**
+     * Add Angular directives to an element string
+     */
+    private static String addAngularDirectives(String elementString, List<String> angularDirectives) {
+        String result = elementString;
+        
+        for (String directive : angularDirectives) {
+            result += " " + directive;
+        }
+        
+        return result;
     }
 
     /**
