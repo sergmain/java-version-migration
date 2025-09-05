@@ -48,11 +48,10 @@ public class MigrationProcessor {
     public static final AtomicLong totalSize = new AtomicLong();
 
     public static void migrationProcessor(final Globals globals) throws IOException, InterruptedException {
-//        executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(globals.threads);
-        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(globals.threads);
         long mills = System.currentTimeMillis();
         for (Path path : globals.startingPath) {
-            final IOFileFilter filter = FileFileFilter.INSTANCE.and(new SuffixFileFilter(new String[]{".java"}));
+            final IOFileFilter filter = FileFileFilter.INSTANCE.and(new SuffixFileFilter(new String[]{globals.fileMask}));
             try (Stream<Path> stream = PathUtils.walk(path, filter, Integer.MAX_VALUE, false, FileVisitOption.FOLLOW_LINKS)) {
                 stream.filter(p-> filterPath(p, globals.excludePath)).forEach(p -> executor.submit(()->process(p, globals)));
             }

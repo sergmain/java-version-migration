@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.lang.Nullable;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -44,7 +45,7 @@ public class Globals {
 
     public int startJavaVersion;
     public int targetJavaVersion;
-    public int threads = 4;
+    public int threads = 8;
     private Charset charset;
 
     // number of spaces as offset in code
@@ -52,6 +53,9 @@ public class Globals {
 
     public final List<Path> startingPath = new ArrayList<>();
     public final List<Path> excludePath = new ArrayList<>();
+
+    @Nullable
+    public String fileMask = ".java";
 
     public List<Map<String, String>> metas = new ArrayList<>();
 

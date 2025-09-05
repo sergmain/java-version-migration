@@ -1,6 +1,7 @@
 migration:
     startJavaVersion: 17
     targetJavaVersion: 21
+    fileMask: ".java" # or ".html"
     startingPath:
         - src
     excludePath:
