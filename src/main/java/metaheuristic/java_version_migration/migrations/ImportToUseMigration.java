@@ -38,25 +38,26 @@ public class ImportToUseMigration {
 //
 //    fix code and tests
 
-    public static String migrateImportToUseMigration(String content) {
-        // Transform @import statements to @use statements while preserving semicolon presence
+    public static String migrateImportToUseMigration(String content, boolean semicolon) {
+        String suffix = semicolon ? " as *;" : " as *";
+        
         return content
             // Handle quoted imports with .scss extension and semicolons
-            .replaceAll("@import\\s*'([^'\\n]+)\\.scss'\\s*;", "@use '$1' as *;")
-            .replaceAll("@import\\s*\"([^\"\\n]+)\\.scss\"\\s*;", "@use \"$1\" as *;")
+            .replaceAll("@import\\s*'([^'\\n]+)\\.scss'\\s*;", "@use '$1'" + suffix)
+            .replaceAll("@import\\s*\"([^\"\\n]+)\\.scss\"\\s*;", "@use \"$1\"" + suffix)
             // Handle quoted imports with .sass extension and semicolons
-            .replaceAll("@import\\s*'([^'\\n]+)\\.sass'\\s*;", "@use '$1' as *;")
-            .replaceAll("@import\\s*\"([^\"\\n]+)\\.sass\"\\s*;", "@use \"$1\" as *;")
+            .replaceAll("@import\\s*'([^'\\n]+)\\.sass'\\s*;", "@use '$1'" + suffix)
+            .replaceAll("@import\\s*\"([^\"\\n]+)\\.sass\"\\s*;", "@use \"$1\"" + suffix)
             // Handle quoted imports without extension and with semicolons only
-            .replaceAll("@import\\s*'([^'\\n]*[^'\\n.]+)'\\s*;", "@use '$1' as *;")
-            .replaceAll("@import\\s*\"([^\"\\n]*[^\"\\n.]+)\"\\s*;", "@use \"$1\" as *;")
+            .replaceAll("@import\\s*'([^'\\n]*[^'\\n.]+)'\\s*;", "@use '$1'" + suffix)
+            .replaceAll("@import\\s*\"([^\"\\n]*[^\"\\n.]+)\"\\s*;", "@use \"$1\"" + suffix)
             // Handle unquoted imports with .scss extension and semicolons  
-            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss\\s*;", "@use '$1' as *;")
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss\\s*;", "@use '$1'" + suffix)
             // Handle unquoted imports with .scss extension but without semicolons
-            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss(?![;])", "@use '$1' as *")
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss(?![;])", "@use '$1'" + suffix)
             // Handle unquoted imports without .scss extension and with semicolons
-            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\s*;", "@use '$1' as *;")
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\s*;", "@use '$1'" + suffix)
             // Handle unquoted imports without .scss extension and without semicolons
-            .replaceAll("@import\\s+([^\\s;'\"\\n]+)(?![;])", "@use '$1' as *;");
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)(?![;])", "@use '$1'" + suffix);
     }
 }

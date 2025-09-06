@@ -41,7 +41,7 @@ class ImportToUseMigrationTest {
         String expected = "@use '../../../variables' as *";
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, false);
 
         // Then
         assertEquals(expected, result);
@@ -71,7 +71,7 @@ class ImportToUseMigrationTest {
             }""";
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result);
@@ -93,7 +93,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result);
@@ -123,7 +123,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result);
@@ -147,7 +147,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result);
@@ -161,7 +161,7 @@ class ImportToUseMigrationTest {
         String expected = "@use '../../../variables' as *;";
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -176,7 +176,7 @@ class ImportToUseMigrationTest {
         String expected = "@use \"../../../variables\" as *;";
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -200,7 +200,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -232,7 +232,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -258,7 +258,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -280,7 +280,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -306,7 +306,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -368,7 +368,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -393,7 +393,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(input, result,
@@ -417,7 +417,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -461,7 +461,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -483,7 +483,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -505,7 +505,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -527,7 +527,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
@@ -541,7 +541,7 @@ class ImportToUseMigrationTest {
         String input = "";
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals("", result,
@@ -555,7 +555,7 @@ class ImportToUseMigrationTest {
         String input = "   \n\t  \r\n  ";
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(input, result,
@@ -569,7 +569,7 @@ class ImportToUseMigrationTest {
         String input = "@import '../variables.scss'";
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(input, result,
@@ -593,7 +593,7 @@ class ImportToUseMigrationTest {
             """;
 
         // When
-        String result = migrateImportToUseMigration(input);
+        String result = migrateImportToUseMigration(input, true);
 
         // Then
         assertEquals(expected, result,
