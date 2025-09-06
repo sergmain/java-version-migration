@@ -66,6 +66,30 @@ class ImportToUseMigrationTest {
     }
 
     @Test
+    @DisplayName("Should handle unquoted import statements")
+    void testUnquotedImports() {
+        // Given
+        String input = """
+            @import ../../../variables.scss;
+            @import ./mixins.scss;
+            @import ../../base/reset.scss;
+            """;
+
+        String expected = """
+            @use '../../../variables.scss' as *;
+            @use './mixins.scss' as *;
+            @use '../../base/reset.scss' as *;
+            """;
+
+        // When
+        String result = migrateImportToUseMigration(input);
+
+        // Then
+        assertEquals(expected, result,
+            "Should convert unquoted @import statements to @use with single quotes");
+    }
+
+    @Test
     @DisplayName("Should handle multiple imports in same content")
     void testMultipleImports() {
         // Given
@@ -124,7 +148,7 @@ class ImportToUseMigrationTest {
     }
 
     @Test
-    @DisplayName("Should handle imports with standard whitespace")
+    @DisplayName("Should handle imports with whitespace")
     void testImportsWithWhitespace() {
         // Given
         String input = """
@@ -435,26 +459,26 @@ class ImportToUseMigrationTest {
     }
 
     @Test
-    @DisplayName("Should handle malformed import statements appropriately")
-    void testMalformedImports() {
+    @DisplayName("Should handle well-formed imports correctly")
+    void testWellFormedImports() {
         // Given
         String input = """
             @import '../variables';
-            @import ../variables.scss;
             @import 'variables.scss';
             @import "variables.scss";
+            """;
+
+        String expected = """
+            @import '../variables';
+            @use 'variables' as *;
+            @use "variables" as *;
             """;
 
         // When
         String result = migrateImportToUseMigration(input);
 
         // Then
-        assertEquals("""
-            @import '../variables';
-            @import ../variables.scss;
-            @use 'variables' as *;
-            @use "variables" as *;
-            """, result,
+        assertEquals(expected, result,
             "Should only process well-formed @import statements");
     }
 }

@@ -34,9 +34,10 @@ public class ImportToUseMigration {
 
     public static String migrateImportToUseMigration(String content) {
         // Transform @import 'path.scss'; to @use 'path' as *;
-        // Only match well-formed import statements with proper quotes and semicolons
+        // Handle quoted and unquoted import statements
         return content
             .replaceAll("@import\\s*'([^'\\n]+)\\.scss'\\s*;", "@use '$1' as *;")
-            .replaceAll("@import\\s*\"([^\"\\n]+)\\.scss\"\\s*;", "@use \"$1\" as *;");
+            .replaceAll("@import\\s*\"([^\"\\n]+)\\.scss\"\\s*;", "@use \"$1\" as *;")
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+\\.scss)\\s*;", "@use '$1' as *;");
     }
 }
