@@ -27,10 +27,16 @@ import metaheuristic.java_version_migration.data.Content;
 public class ImportToUseMigration {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
-        String newContent = migrateImportToUseMigration(content);
+        boolean semicolon = cfg.path().getFileName().toString().toLowerCase().endsWith(".scss");
+        String newContent = migrateImportToUseMigration(content, semicolon);
         Content result = new Content(newContent, !newContent.equals(content));
         return result;
     }
+
+//    new requirements:
+//    add semicolon variable to method migrateMathUnitAngular() - if it true, then put semicolon at the end, otherwise there shouldn't be semicolon at the end of line
+//
+//    fix code and tests
 
     public static String migrateImportToUseMigration(String content) {
         // Transform @import statements to @use statements while preserving semicolon presence

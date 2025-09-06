@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 public class MathUnitAngularMigrationTest {
 
     @Test
-    void testMigrateSingleUnitCall() {
+    void testMigrateSingleUnitCallWithSemicolon() {
         String input = """
                 .element {
                   top: unit(6);
@@ -45,12 +45,31 @@ public class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
     @Test
-    void testMigrateMultipleUnitCalls() {
+    void testMigrateSingleUnitCallWithoutSemicolon() {
+        String input = """
+                .element {
+                  top: unit(6);
+                }
+                """;
+        
+        String expected = """
+                @use 'sass:math'
+                .element {
+                  top: math.unit(6);
+                }
+                """;
+        
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void testMigrateMultipleUnitCallsWithSemicolon() {
         String input = """
                 .element {
                   top: unit(6);
@@ -68,7 +87,30 @@ public class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void testMigrateMultipleUnitCallsWithoutSemicolon() {
+        String input = """
+                .element {
+                  top: unit(6);
+                  left: unit(10);
+                  margin: unit(5) unit(3);
+                }
+                """;
+        
+        String expected = """
+                @use 'sass:math'
+                .element {
+                  top: math.unit(6);
+                  left: math.unit(10);
+                  margin: math.unit(5) math.unit(3);
+                }
+                """;
+        
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
         assertEquals(expected, result);
     }
 
@@ -89,7 +131,7 @@ public class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
@@ -109,7 +151,7 @@ public class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
@@ -123,7 +165,10 @@ public class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        assertEquals(input, result);
+        
+        result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
         assertEquals(input, result);
     }
 
@@ -137,19 +182,25 @@ public class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        assertEquals(input, result);
+        
+        result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
         assertEquals(input, result);
     }
 
     @Test
     void testEmptyContent() {
         String input = "";
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        assertEquals(input, result);
+        
+        result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
         assertEquals(input, result);
     }
 
     @Test
-    void testComplexSassWithMixins() {
+    void testComplexSassWithMixinsWithSemicolon() {
         String input = """
                 @mixin button-style {
                   padding: unit(8) unit(16);
@@ -175,7 +226,38 @@ public class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input);
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void testComplexSassWithMixinsWithoutSemicolon() {
+        String input = """
+                @mixin button-style {
+                  padding: unit(8) unit(16);
+                  border-radius: unit(4);
+                }
+                
+                .button {
+                  @include button-style;
+                  margin: unit(10);
+                }
+                """;
+        
+        String expected = """
+                @use 'sass:math'
+                @mixin button-style {
+                  padding: math.unit(8) math.unit(16);
+                  border-radius: math.unit(4);
+                }
+                
+                .button {
+                  @include button-style;
+                  margin: math.unit(10);
+                }
+                """;
+        
+        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
         assertEquals(expected, result);
     }
 }

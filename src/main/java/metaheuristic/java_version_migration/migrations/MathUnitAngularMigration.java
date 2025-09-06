@@ -27,12 +27,13 @@ import metaheuristic.java_version_migration.data.Content;
 public class MathUnitAngularMigration {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
-        String newContent = migrateMathUnitAngular(content);
+        boolean semicolon = cfg.path().getFileName().toString().toLowerCase().endsWith(".scss");
+        String newContent = migrateMathUnitAngular(content, semicolon);
         Content result = new Content(newContent, !newContent.equals(content));
         return result;
     }
 
-    public static String migrateMathUnitAngular(String content) {
+    public static String migrateMathUnitAngular(String content, boolean semicolon) {
         String result = content;
         
         // Replace unit( with math.unit( only when not already prefixed with math.
@@ -40,7 +41,8 @@ public class MathUnitAngularMigration {
         
         // Add '@use sass:math'; at the top if not already present and unit functions were found
         if (!content.equals(result) && !result.contains("@use 'sass:math'")) {
-            result = "@use 'sass:math';\n" + result;
+            String useStatement = semicolon ? "@use 'sass:math';\n" : "@use 'sass:math'\n";
+            result = useStatement + result;
         }
         
         return result;
