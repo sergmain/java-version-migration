@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
  * Time: 10:27 PM
  */
 @Execution(CONCURRENT)
-public class MigrateSynchronizedJava21Test {
+class MigrateSynchronizedJava21Test {
 
     @Test
     public void test_positions_1() {

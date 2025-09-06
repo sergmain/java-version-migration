@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
  * Time: 2:26 AM
  */
 @Execution(CONCURRENT)
-public class MigrationUtilsTest {
+class MigrationUtilsTest {
 
     @Test
     public void test_isCommentLine_1() {

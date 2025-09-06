@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
  * Time: 10:27 PM
  */
 @Execution(CONCURRENT)
-public class MigrateSynchronizedJava21_StampedLockTest {
+class MigrateSynchronizedJava21_StampedLockTest {
 
 
     @Test

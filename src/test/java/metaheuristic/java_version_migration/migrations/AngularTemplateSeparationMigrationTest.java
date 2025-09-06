@@ -17,7 +17,10 @@
 package metaheuristic.java_version_migration.migrations;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 /**
  * Unit tests for AngularTemplateSeparationMigration
@@ -26,7 +29,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * Date: 9/4/2025
  * Time: 4:57 PM
  */
-public class AngularTemplateSeparationMigrationTest {
+@Execution(CONCURRENT)
+class AngularTemplateSeparationMigrationTest {
 
     @Test
     public void testBasicSeparation() {

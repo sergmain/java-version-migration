@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
  * Time: 1:11 PM
  */
 @Execution(CONCURRENT)
-public class MathUnitAngularMigrationTest {
+class MathUnitAngularMigrationTest {
 
     @Test
     void testMigrateSingleUnitCallWithSemicolon() {
