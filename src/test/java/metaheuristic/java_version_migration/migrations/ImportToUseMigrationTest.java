@@ -38,7 +38,59 @@ class ImportToUseMigrationTest {
     @Test
     void test_migrateImportToUseMigration_1() {
         String input = "@import ../../../variables.scss";
-        String expected = "@use '../../../variables' as *;";
+        String expected = "@use '../../../variables' as *";
+
+        // When
+        String result = migrateImportToUseMigration(input);
+
+        // Then
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void test_migrateImportToUseMigration_2() {
+        String input = """
+            @import ../../../variables.scss;
+            
+            :host {
+                .app-view {
+                    height: 100%;
+                    display: flex;
+                    flex-direction: column;
+                }
+            }""";
+        String expected = """
+            @use '../../../variables' as *;
+            
+            :host {
+                .app-view {
+                    height: 100%;
+                    display: flex;
+                    flex-direction: column;
+                }
+            }""";
+
+        // When
+        String result = migrateImportToUseMigration(input);
+
+        // Then
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void test_migrateImportToUseMigration_3() {
+        String input = """
+            @import ../ai
+            
+            mat-sidenav-content\s
+                 overflow: hidden
+            """;
+        String expected = """
+            @use '../ai' as *;
+            
+            mat-sidenav-content\s
+                 overflow: hidden
+            """;
 
         // When
         String result = migrateImportToUseMigration(input);

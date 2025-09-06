@@ -33,11 +33,18 @@ public class ImportToUseMigration {
     }
 
     public static String migrateImportToUseMigration(String content) {
-        // Transform @import 'path.scss'; to @use 'path' as *;
-        // Handle quoted and unquoted import statements
+        // Transform @import statements to @use statements while preserving semicolon presence
         return content
+            // Handle quoted imports with .scss extension and semicolons
             .replaceAll("@import\\s*'([^'\\n]+)\\.scss'\\s*;", "@use '$1' as *;")
             .replaceAll("@import\\s*\"([^\"\\n]+)\\.scss\"\\s*;", "@use \"$1\" as *;")
-            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss\\s*;", "@use '$1' as *;");
+            // Handle unquoted imports with .scss extension and semicolons  
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss\\s*;", "@use '$1' as *;")
+            // Handle unquoted imports with .scss extension but without semicolons
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss(?![;])", "@use '$1' as *")
+            // Handle unquoted imports without .scss extension and with semicolons
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\s*;", "@use '$1' as *;")
+            // Handle unquoted imports without .scss extension and without semicolons
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)(?![;])", "@use '$1' as *;");
     }
 }
