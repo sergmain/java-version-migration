@@ -38,6 +38,12 @@ public class ImportToUseMigration {
             // Handle quoted imports with .scss extension and semicolons
             .replaceAll("@import\\s*'([^'\\n]+)\\.scss'\\s*;", "@use '$1' as *;")
             .replaceAll("@import\\s*\"([^\"\\n]+)\\.scss\"\\s*;", "@use \"$1\" as *;")
+            // Handle quoted imports with .sass extension and semicolons
+            .replaceAll("@import\\s*'([^'\\n]+)\\.sass'\\s*;", "@use '$1' as *;")
+            .replaceAll("@import\\s*\"([^\"\\n]+)\\.sass\"\\s*;", "@use \"$1\" as *;")
+            // Handle quoted imports without extension and with semicolons only
+            .replaceAll("@import\\s*'([^'\\n]*[^'\\n.]+)'\\s*;", "@use '$1' as *;")
+            .replaceAll("@import\\s*\"([^\"\\n]*[^\"\\n.]+)\"\\s*;", "@use \"$1\" as *;")
             // Handle unquoted imports with .scss extension and semicolons  
             .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss\\s*;", "@use '$1' as *;")
             // Handle unquoted imports with .scss extension but without semicolons

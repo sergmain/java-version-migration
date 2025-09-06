@@ -100,6 +100,60 @@ class ImportToUseMigrationTest {
     }
 
     @Test
+    void test_migrateImportToUseMigration_4() {
+        String input = """
+            @import "../ct";
+            
+            :host {
+                display: block;
+                padding: unit(1.5) unit(1.75) unit(1.25);
+                line-height: 1.2;
+                border-radius: unit(0.5);
+            }
+            """;
+        String expected = """
+            @use "../ct" as *;
+            
+            :host {
+                display: block;
+                padding: unit(1.5) unit(1.75) unit(1.25);
+                line-height: 1.2;
+                border-radius: unit(0.5);
+            }
+            """;
+
+        // When
+        String result = migrateImportToUseMigration(input);
+
+        // Then
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void test_migrateImportToUseMigration_5() {
+        String input = """
+            @import "../company.sass";
+            
+            mat-checkbox {
+                position: relative
+            }
+            """;
+        String expected = """
+            @use "../company" as *;
+            
+            mat-checkbox {
+                position: relative
+            }
+            """;
+
+        // When
+        String result = migrateImportToUseMigration(input);
+
+        // Then
+        assertEquals(expected, result);
+    }
+
+    @Test
     @DisplayName("Should convert basic SCSS import with single quotes")
     void testBasicImportWithSingleQuotes() {
         // Given
@@ -533,7 +587,7 @@ class ImportToUseMigrationTest {
             """;
 
         String expected = """
-            @import '../variables';
+            @use '../variables' as *;
             @use 'variables' as *;
             @use "variables" as *;
             """;
