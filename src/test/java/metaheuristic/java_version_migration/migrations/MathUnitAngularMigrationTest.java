@@ -39,7 +39,7 @@ public class MathUnitAngularMigrationTest {
                 """;
         
         String expected = """
-                use 'sass:math';
+                @use 'sass:math';
                 .element {
                   top: math.unit(6);
                 }
@@ -60,7 +60,7 @@ public class MathUnitAngularMigrationTest {
                 """;
         
         String expected = """
-                use 'sass:math';
+                @use 'sass:math';
                 .element {
                   top: math.unit(6);
                   left: math.unit(10);
@@ -82,7 +82,7 @@ public class MathUnitAngularMigrationTest {
                 """;
         
         String expected = """
-                use 'sass:math';
+                @use 'sass:math';
                 .element {
                   top: math.unit(6);
                   left: math.unit(10);
@@ -96,14 +96,14 @@ public class MathUnitAngularMigrationTest {
     @Test
     void testNoChangeWhenAlreadyHasSassMath() {
         String input = """
-                use 'sass:math';
+                @use 'sass:math';
                 .element {
                   top: unit(6);
                 }
                 """;
         
         String expected = """
-                use 'sass:math';
+                @use 'sass:math';
                 .element {
                   top: math.unit(6);
                 }
@@ -130,7 +130,7 @@ public class MathUnitAngularMigrationTest {
     @Test
     void testNoChangeWhenAlreadyMathUnit() {
         String input = """
-                use 'sass:math';
+                @use 'sass:math';
                 .element {
                   top: math.unit(6);
                   left: math.unit(10);
@@ -163,7 +163,7 @@ public class MathUnitAngularMigrationTest {
                 """;
         
         String expected = """
-                use 'sass:math';
+                @use 'sass:math';
                 @mixin button-style {
                   padding: math.unit(8) math.unit(16);
                   border-radius: math.unit(4);

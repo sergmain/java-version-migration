@@ -45,7 +45,8 @@ public class Migration {
 //                JUnitTagsInsertion::process
 //                CtFlexMigration::process
 //                AngularTemplateSeparationMigration::process
-                ImportToUseMigration::process
+//                ImportToUseMigration::process
+                MathUnitAngularMigration::process
             )))
             .sorted(Comparator.comparingInt(MigrationFunctions::version)).toList();
 

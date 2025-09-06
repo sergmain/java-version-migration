@@ -38,9 +38,9 @@ public class MathUnitAngularMigration {
         // Replace unit( with math.unit( only when not already prefixed with math.
         result = result.replaceAll("(?<!math\\.)\\bunit\\s*\\(", "math.unit(");
         
-        // Add 'use sass:math'; at the top if not already present and unit functions were found
-        if (!content.equals(result) && !result.contains("use 'sass:math'")) {
-            result = "use 'sass:math';\n" + result;
+        // Add '@use sass:math'; at the top if not already present and unit functions were found
+        if (!content.equals(result) && !result.contains("@use 'sass:math'")) {
+            result = "@use 'sass:math';\n" + result;
         }
         
         return result;
