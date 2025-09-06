@@ -36,6 +36,18 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 class ImportToUseMigrationTest {
 
     @Test
+    void test_migrateImportToUseMigration_1() {
+        String input = "@import ../../../variables.scss";
+        String expected = "@use '../../../variables' as *;";
+
+        // When
+        String result = migrateImportToUseMigration(input);
+
+        // Then
+        assertEquals(expected, result);
+    }
+
+    @Test
     @DisplayName("Should convert basic SCSS import with single quotes")
     void testBasicImportWithSingleQuotes() {
         // Given
@@ -76,9 +88,9 @@ class ImportToUseMigrationTest {
             """;
 
         String expected = """
-            @use '../../../variables.scss' as *;
-            @use './mixins.scss' as *;
-            @use '../../base/reset.scss' as *;
+            @use '../../../variables' as *;
+            @use './mixins' as *;
+            @use '../../base/reset' as *;
             """;
 
         // When

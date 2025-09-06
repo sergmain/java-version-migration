@@ -38,6 +38,6 @@ public class ImportToUseMigration {
         return content
             .replaceAll("@import\\s*'([^'\\n]+)\\.scss'\\s*;", "@use '$1' as *;")
             .replaceAll("@import\\s*\"([^\"\\n]+)\\.scss\"\\s*;", "@use \"$1\" as *;")
-            .replaceAll("@import\\s+([^\\s;'\"\\n]+\\.scss)\\s*;", "@use '$1' as *;");
+            .replaceAll("@import\\s+([^\\s;'\"\\n]+)\\.scss\\s*;", "@use '$1' as *;");
     }
 }
