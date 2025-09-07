@@ -46,7 +46,8 @@ public class Migration {
 //                CtFlexMigration::process
 //                AngularTemplateSeparationMigration::process
 //                ImportToUseMigration::process
-                MathUnitAngularMigration::process
+//                MathUnitAngularMigration::process
+                MapGetAngularMigration::process
             )))
             .sorted(Comparator.comparingInt(MigrationFunctions::version)).toList();
 

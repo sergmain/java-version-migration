@@ -16,15 +16,71 @@
 
 package metaheuristic.java_version_migration.migrations;
 
-import org.junit.jupiter.api.parallel.Execution;
-
-import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author Sergio Lissner
  * Date: 9/6/2025
- * Time: 4:29 PM
+ * Time: 4:24 PM
  */
-@Execution(CONCURRENT)
-class MapGetAngularMigrationTest {
+public class MapGetAngularMigrationTest {
+
+    @Test
+    public void migrateMapGetAngularTest() {
+        String content = """
+            $accent: map-get($theme, accent);
+            $primary: map-get($colors, primary);
+            """;
+        
+        String result = MapGetAngularMigration.migrateMapGetAngular(content, true);
+        
+        String expected = """
+            @use "sass:map";
+            $accent: map.get($theme, accent);
+            $primary: map.get($colors, primary);
+            """;
+        
+        assertEquals(expected, result);
+    }
+
+    @Test
+    public void migrateMapGetAngularTest_withoutSemicolon() {
+        String content = """
+            $accent: map-get($theme, accent);
+            """;
+        
+        String result = MapGetAngularMigration.migrateMapGetAngular(content, false);
+        
+        String expected = """
+            @use "sass:map"
+            $accent: map.get($theme, accent);
+            """;
+        
+        assertEquals(expected, result);
+    }
+
+    @Test
+    public void migrateMapGetAngularTest_noMapGet() {
+        String content = """
+            $primary: #000000;
+            $secondary: #ffffff;
+            """;
+        
+        String result = MapGetAngularMigration.migrateMapGetAngular(content, true);
+        
+        assertEquals(content, result);
+    }
+
+    @Test
+    public void migrateMapGetAngularTest_alreadyMigrated() {
+        String content = """
+            @use "sass:map";
+            $accent: map.get($theme, accent);
+            """;
+        
+        String result = MapGetAngularMigration.migrateMapGetAngular(content, true);
+        
+        assertEquals(content, result);
+    }
 }
