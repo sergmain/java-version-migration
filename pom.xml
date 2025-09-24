@@ -113,7 +113,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>metaheuristic.java_version_migration.MetaheuristicJavaVersionMigration</mainClass>
+                    <mainClass>metaheuristic.java_version_migration.MetaheuristicMigrationApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

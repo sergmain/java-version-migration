@@ -20,9 +20,8 @@ import metaheuristic.java_version_migration.Globals;
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.data.Content;
 
-import java.nio.file.Path;
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * @author Sergio Lissner
@@ -39,7 +38,7 @@ public class AngularToSignalMigration {
         by project's instructions I mean instruction in Claude, not in readme.md or any other file in repo
         -----------
         **Problem:** I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
-        
+       
         =================
         start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigration
         and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigrationTest
@@ -47,8 +46,13 @@ public class AngularToSignalMigration {
         variable 'String content', which method migrateAngularToSignalMigration() will receive, will be always not null, no need in additional check.
         ================
         as i understand, for better decision, this migration method must have access to other files in dir, specifically, .html, to understand what to migrate to signal.
-        use Map<Path, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing needed files
+        use Map<String, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing required files
         =============
+
+        this is a continue of coding of this method and tests, so check the current implementation of method/tests and make needed adjustments
+        =============
+        
+        also, there are 2 files (.ts and .html) which i want to migrate to signal by using this method, but right now nothing was changed when I run migrateAngularToSignalMigrationTest()
         """;
 
     public static Content process(Migration.MigrationConfig cfg, Globals globals, String content) {
@@ -103,8 +107,8 @@ public class AngularToSignalMigration {
         String tsFileName = cfg.path().getFileName().toString();
         if (tsFileName.endsWith(".ts")) {
             String baseName = tsFileName.substring(0, tsFileName.length() - 3);
-            Path htmlPath = cfg.path().getParent().resolve(baseName + ".html");
-            return cfg.files().getOrDefault(htmlPath, "");
+            String htmlName = baseName+".html";
+            return cfg.files().getOrDefault(htmlName, "");
         }
         return "";
     }

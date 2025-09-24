@@ -34,13 +34,13 @@ import java.time.LocalDateTime;
 @SpringBootApplication
 @Slf4j
 @AllArgsConstructor
-public class MetaheuristicJavaVersionMigration implements CommandLineRunner {
+public class MetaheuristicMigrationApplication implements CommandLineRunner {
 
     private final Globals globals;
     private final ApplicationContext appCtx;
 
     public static void main(String[] args) {
-        SpringApplication.run(MetaheuristicJavaVersionMigration.class, args);
+        SpringApplication.run(MetaheuristicMigrationApplication.class, args);
     }
 
     @SuppressWarnings("finally")

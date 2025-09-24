@@ -18,14 +18,13 @@ package metaheuristic.java_version_migration;
 
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.data.Content;
-import metaheuristic.java_version_migration.migrations.AngularMapGetMigration;
+import metaheuristic.java_version_migration.migrations.AngularToSignalMigration;
 import org.apache.commons.lang3.function.TriFunction;
 
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
 /**
@@ -54,7 +53,8 @@ public class Migration {
 //                AngularTemplateSeparationMigration::process
 //                AngularImportToUseMigration::process
 //                AngularMathUnitMigration::process
-                AngularMapGetMigration::process
+//                AngularMapGetMigration::process
+                AngularToSignalMigration::process
             )))
             .sorted(Comparator.comparingInt(MigrationFunctions::version)).toList();
 

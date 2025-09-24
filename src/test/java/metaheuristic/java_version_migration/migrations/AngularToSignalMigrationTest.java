@@ -98,7 +98,7 @@ class AngularToSignalMigrationTest {
         String expected = """
             import { computed } from '@angular/core';
             export class TestComponent {
-                filteredItems = computed(() => { return this.items.filter(item => item.active); });
+                filteredItems = computed(() => {return this.items.filter(item => item.active);});
             }
             """;
         
@@ -250,21 +250,21 @@ class AngularToSignalMigrationTest {
     
     private Migration.MigrationConfig createConfig(String fileName, String tsContent, String htmlContent) {
         Path tsPath = Paths.get(fileName);
-        Path htmlPath = tsPath.getParent() != null ? 
-            tsPath.getParent().resolve(fileName.replace(".ts", ".html")) :
-            Paths.get(fileName.replace(".ts", ".html"));
-            
+        String baseName = tsPath.getFileName().toString().substring(0, fileName.length() - 3);
+
         Map<String, String> files = new HashMap<>();
-        files.put(fileName+".ts", tsContent);
-        files.put(fileName+".html", htmlContent);
+        files.put(baseName+".ts", tsContent);
+        files.put(baseName+".html", htmlContent);
         
         return new Migration.MigrationConfig(tsPath, files);
     }
     
     private Migration.MigrationConfig createConfigWithoutHtml(String fileName, String tsContent) {
         Path tsPath = Paths.get(fileName);
+        String baseName = tsPath.getFileName().toString().substring(0, fileName.length() - 3);
+
         Map<String, String> files = new HashMap<>();
-        files.put(fileName, tsContent);
+        files.put(baseName+".ts", tsContent);
         
         return new Migration.MigrationConfig(tsPath, files);
     }

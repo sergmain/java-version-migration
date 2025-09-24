@@ -41,7 +41,7 @@ see config/application.sample.yml
 
 - copy file config/application.sample.yml to config/application.yml
 - make value of field startingPath to directory with .java files, i.e. src
-- run metaheuristic.java_version_migration.MetaheuristicJavaVersionMigration.main
+- run metaheuristic.java_version_migration.MetaheuristicMigrationApplication.main
 
 ### Roadmap
 
