@@ -43,7 +43,7 @@ public class AngularToSignalMigration {
         start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateMapGetAngular
         and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateMapGetAngularTest
         ================
-        variable 'String content', which method migrateMapGetAngularTest() is receiving, will be always not null, no need in additional check.
+        variable 'String content', which method migrateAngularToSignalMigration() will receive, will be always not null, no need in additional check.
         ================
         as i understand, for better decision, this migration method must have access to other files in dir, specifically, .html, to understand what to migrate to signal.
         use Map<Path, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing needed files
@@ -51,12 +51,12 @@ public class AngularToSignalMigration {
         """;
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
-        String newContent = migrateMapGetAngular(cfg, content);
+        String newContent = migrateAngularToSignalMigration(cfg, content);
         Content result = new Content(newContent, !newContent.equals(content));
         return result;
     }
 
-    public static String migrateMapGetAngular(Migration.MigrationConfig cfg, String content) {
+    public static String migrateAngularToSignalMigration(Migration.MigrationConfig cfg, String content) {
         if (content.trim().isEmpty()) {
             return content;
         }

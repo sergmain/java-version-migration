@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 class AngularToSignalMigrationTest {
 
     @Test
-    public void migrateMapGetAngularTest_simpleProperty() {
+    public void migrateAngularToSignalMigrationTest_simpleProperty() {
         String htmlContent = """
             <div>{{ items }}</div>
             """;
@@ -50,7 +50,7 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         String expected = """
             import { signal } from '@angular/core';
@@ -63,7 +63,7 @@ class AngularToSignalMigrationTest {
     }
     
     @Test
-    public void migrateMapGetAngularTest_propertyNotUsedInTemplate() {
+    public void migrateAngularToSignalMigrationTest_propertyNotUsedInTemplate() {
         String htmlContent = """
             <div>Static content</div>
             """;
@@ -75,14 +75,14 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         // Should not change since property is not used in template
         assertEquals(tsContent, result);
     }
     
     @Test
-    public void migrateMapGetAngularTest_getterToComputed() {
+    public void migrateAngularToSignalMigrationTest_getterToComputed() {
         String htmlContent = """
             <div>{{ filteredItems }}</div>
             """;
@@ -94,7 +94,7 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         String expected = """
             import { computed } from '@angular/core';
@@ -107,7 +107,7 @@ class AngularToSignalMigrationTest {
     }
     
     @Test
-    public void migrateMapGetAngularTest_propertyAssignment() {
+    public void migrateAngularToSignalMigrationTest_propertyAssignment() {
         String tsContent = """
             export class TestComponent {
                 updateItems() {
@@ -118,7 +118,7 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, "");
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         String expected = """
             export class TestComponent {
@@ -133,7 +133,7 @@ class AngularToSignalMigrationTest {
     }
     
     @Test
-    public void migrateMapGetAngularTest_existingAngularImport() {
+    public void migrateAngularToSignalMigrationTest_existingAngularImport() {
         String htmlContent = """
             <div>{{ data }}</div>
             """;
@@ -147,7 +147,7 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         String expected = """
             import { Component, OnInit, signal } from '@angular/core';
@@ -161,7 +161,7 @@ class AngularToSignalMigrationTest {
     }
     
     @Test
-    public void migrateMapGetAngularTest_multipleProperties() {
+    public void migrateAngularToSignalMigrationTest_multipleProperties() {
         String htmlContent = """
             <div>{{ title }}</div>
             <div>{{ count }}</div>
@@ -176,7 +176,7 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         String expected = """
             import { signal } from '@angular/core';
@@ -191,7 +191,7 @@ class AngularToSignalMigrationTest {
     }
     
     @Test 
-    public void migrateMapGetAngularTest_complexPropertyUsage() {
+    public void migrateAngularToSignalMigrationTest_complexPropertyUsage() {
         String htmlContent = """
             <div *ngFor="let item of items">{{ item.name }}</div>
             <button (click)="updateData()">Update</button>
@@ -209,7 +209,7 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         String expected = """
             import { signal } from '@angular/core';
@@ -227,23 +227,15 @@ class AngularToSignalMigrationTest {
     }
     
     @Test
-    public void migrateMapGetAngularTest_nullContent() {
+    public void migrateAngularToSignalMigrationTest_emptyContent() {
         Migration.MigrationConfig cfg = createConfig("test.component.ts", "", "");
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, null);
-        
-        assertNull(result);
-    }
-    
-    @Test
-    public void migrateMapGetAngularTest_emptyContent() {
-        Migration.MigrationConfig cfg = createConfig("test.component.ts", "", "");
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, "");
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, "");
         
         assertEquals("", result);
     }
     
     @Test
-    public void migrateMapGetAngularTest_noHtmlFile() {
+    public void migrateAngularToSignalMigrationTest_noHtmlFile() {
         String tsContent = """
             export class TestComponent {
                 private items: any[] = [];
@@ -251,7 +243,7 @@ class AngularToSignalMigrationTest {
             """;
         
         Migration.MigrationConfig cfg = createConfigWithoutHtml("test.component.ts", tsContent);
-        String result = AngularToSignalMigration.migrateMapGetAngular(cfg, tsContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
         
         // Should not change since no HTML file is available
         assertEquals(tsContent, result);
