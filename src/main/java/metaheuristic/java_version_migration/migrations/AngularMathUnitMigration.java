@@ -22,27 +22,27 @@ import metaheuristic.java_version_migration.data.Content;
 /**
  * @author Sergio Lissner
  * Date: 9/6/2025
- * Time: 4:24 PM
+ * Time: 1:05 PM
  */
-public class MapGetAngularMigration {
+public class AngularMathUnitMigration {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
         boolean semicolon = cfg.path().getFileName().toString().toLowerCase().endsWith(".scss");
-        String newContent = migrateMapGetAngular(content, semicolon);
+        String newContent = migrateMathUnitAngular(content, semicolon);
         Content result = new Content(newContent, !newContent.equals(content));
         return result;
     }
 
-    public static String migrateMapGetAngular(String content, boolean semicolon) {
+    public static String migrateMathUnitAngular(String content, boolean semicolon) {
         String result = content;
         
-        // Replace map-get with map.get
-        result = result.replaceAll("map-get\\(", "map.get(");
+        // Replace unit( with math.unit( only when not already prefixed with math.
+        result = result.replaceAll("(?<!math\\.)\\bunit\\s*\\(", "math.unit(");
         
-        // Add @use "sass:map" at the top if map.get is used and not already present
-        if (result.contains("map.get(") && !result.contains("@use \"sass:map\"")) {
-            String useStatement = semicolon ? "@use \"sass:map\";" : "@use \"sass:map\"";
-            result = useStatement + "\n" + result;
+        // Add '@use sass:math'; at the top if not already present and unit functions were found
+        if (!content.equals(result) && !result.contains("@use 'sass:math'")) {
+            String useStatement = semicolon ? "@use 'sass:math';\n" : "@use 'sass:math'\n";
+            result = useStatement + result;
         }
         
         return result;

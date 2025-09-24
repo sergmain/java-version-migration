@@ -24,7 +24,7 @@ import metaheuristic.java_version_migration.data.Content;
  * Date: 9/5/2025
  * Time: 5:39 PM
  */
-public class ImportToUseMigration {
+public class AngularImportToUseMigration {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
         boolean semicolon = cfg.path().getFileName().toString().toLowerCase().endsWith(".scss");

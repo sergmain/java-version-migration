@@ -23,6 +23,7 @@ import metaheuristic.java_version_migration.migrations.*;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
@@ -35,7 +36,13 @@ import java.util.stream.Stream;
 @Slf4j
 public class Migration {
 
-    public record MigrationConfig(Path path, Globals globals) {}
+    /**
+     * path - path to current file, which is processing rn
+     * globals - parameters from application.properties
+     * files - Map of files with content in directory, where file referred in variable path, located: key - path to file, value - content of file
+     */
+    public record MigrationConfig(Path path, Globals globals, Map<Path, String> files) {}
+
     public record MigrationFunctions(int version, List<BiFunction<Migration.MigrationConfig, String, Content>> functions) {}
 
     public static final List<MigrationFunctions> functions = Stream.of(
@@ -43,11 +50,11 @@ public class Migration {
 //                    MigrateSynchronizedJava21::process,
 //                    RemoveDoubleLF::process
 //                JUnitTagsInsertion::process
-//                CtFlexMigration::process
+//                AngularCtFlexMigration::process
 //                AngularTemplateSeparationMigration::process
-//                ImportToUseMigration::process
-//                MathUnitAngularMigration::process
-                MapGetAngularMigration::process
+//                AngularImportToUseMigration::process
+//                AngularMathUnitMigration::process
+                AngularMapGetMigration::process
             )))
             .sorted(Comparator.comparingInt(MigrationFunctions::version)).toList();
 

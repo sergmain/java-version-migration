@@ -20,19 +20,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 
-import static metaheuristic.java_version_migration.migrations.CtFlexMigration.*;
+import static metaheuristic.java_version_migration.migrations.AngularCtFlexMigration.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 /**
- * Unit tests for CtFlexMigration functionality
+ * Unit tests for AngularCtFlexMigration functionality
  * 
  * @author Sergio Lissner
  * Date: 9/4/2025
  * Time: 5:15 PM
  */
 @Execution(CONCURRENT)
-class CtFlexMigrationTest {
+class AngularCtFlexMigrationTest {
 
     @Test
     @DisplayName("Should convert simple button group pattern")

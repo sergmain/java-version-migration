@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  * Date: 9/4/2025
  * Time: 4:57 PM
  */
-public class CtFlexMigration {
+public class AngularCtFlexMigration {
 
     public static Content process(Migration.MigrationConfig cfg, String content) {
         String newContent = migrateCtFlexToDiv(content);

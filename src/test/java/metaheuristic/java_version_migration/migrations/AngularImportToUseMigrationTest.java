@@ -20,12 +20,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 
-import static metaheuristic.java_version_migration.migrations.ImportToUseMigration.*;
+import static metaheuristic.java_version_migration.migrations.AngularImportToUseMigration.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 /**
- * Unit tests for ImportToUseMigration functionality
+ * Unit tests for AngularImportToUseMigration functionality
  * Tests migration from SCSS @import to @use statements
  * 
  * @author Sergio Lissner
@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
  * Time: 12:00 PM
  */
 @Execution(CONCURRENT)
-class ImportToUseMigrationTest {
+class AngularImportToUseMigrationTest {
 
     @Test
     void test_migrateImportToUseMigration_1() {

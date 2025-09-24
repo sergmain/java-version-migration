@@ -24,7 +24,51 @@ import static org.junit.jupiter.api.Assertions.*;
  * Date: 9/6/2025
  * Time: 4:24 PM
  */
-public class MapGetAngularMigrationTest {
+public class AngularMapGetMigrationTest {
+
+    String sonnet = """
+        ================================================
+        DO NO MAKE ANY CHANGES IN OTHER FILES!!!
+        
+        ==============================================
+        
+        
+        BEFORE STARTING, READ PROJECT'S INSTRUCTIONS CAREFULLY.
+        by project's instructions I mean instruction in Claude, not in readme.md or any other file in repo
+        
+        -----------
+        
+        **Problem:** After migrating to Angular 19, I've got a warning:
+         Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+           Use map.get instead.
+        \s
+        **Before:**
+        ```
+        $accent: map-get($theme, accent);
+        ```
+        
+        **After:**
+        ```
+        @use "sass:map";
+        $accent: map.get($theme, accent);
+        ```
+        
+        =================
+        
+        start to implement a method metaheuristic.java_version_migration.migrations.AngularMapGetMigration.migrateMapGetAngular
+        and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularMapGetMigration.migrateMapGetAngularTest
+        
+        ================
+        variable 'String content', which method migrateMapGetAngularTest() is receiving, will be always not null, no need in additional check.
+        ================
+        
+        usage of @use "sass:map"; must be added at the top of file
+        
+        =============
+        if variable semicolon==true, then put semicolon at the end of @use, otherwise there shouldn't be semicolon at the end of line
+        
+        =============
+        """;
 
     @Test
     public void migrateMapGetAngularTest() {
@@ -33,7 +77,7 @@ public class MapGetAngularMigrationTest {
             $primary: map-get($colors, primary);
             """;
         
-        String result = MapGetAngularMigration.migrateMapGetAngular(content, true);
+        String result = AngularMapGetMigration.migrateMapGetAngular(content, true);
         
         String expected = """
             @use "sass:map";
@@ -50,7 +94,7 @@ public class MapGetAngularMigrationTest {
             $accent: map-get($theme, accent);
             """;
         
-        String result = MapGetAngularMigration.migrateMapGetAngular(content, false);
+        String result = AngularMapGetMigration.migrateMapGetAngular(content, false);
         
         String expected = """
             @use "sass:map"
@@ -67,7 +111,7 @@ public class MapGetAngularMigrationTest {
             $secondary: #ffffff;
             """;
         
-        String result = MapGetAngularMigration.migrateMapGetAngular(content, true);
+        String result = AngularMapGetMigration.migrateMapGetAngular(content, true);
         
         assertEquals(content, result);
     }
@@ -79,7 +123,7 @@ public class MapGetAngularMigrationTest {
             $accent: map.get($theme, accent);
             """;
         
-        String result = MapGetAngularMigration.migrateMapGetAngular(content, true);
+        String result = AngularMapGetMigration.migrateMapGetAngular(content, true);
         
         assertEquals(content, result);
     }

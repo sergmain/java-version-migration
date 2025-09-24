@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
  * Time: 1:11 PM
  */
 @Execution(CONCURRENT)
-class MathUnitAngularMigrationTest {
+class AngularMathUnitMigrationTest {
 
     @Test
     void testMigrateSingleUnitCallWithSemicolon() {
@@ -45,7 +45,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
@@ -64,7 +64,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, false);
         assertEquals(expected, result);
     }
 
@@ -87,7 +87,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
@@ -110,7 +110,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, false);
         assertEquals(expected, result);
     }
 
@@ -131,7 +131,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
@@ -151,7 +151,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
@@ -165,10 +165,10 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(input, result);
         
-        result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
+        result = AngularMathUnitMigration.migrateMathUnitAngular(input, false);
         assertEquals(input, result);
     }
 
@@ -182,20 +182,20 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(input, result);
         
-        result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
+        result = AngularMathUnitMigration.migrateMathUnitAngular(input, false);
         assertEquals(input, result);
     }
 
     @Test
     void testEmptyContent() {
         String input = "";
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(input, result);
         
-        result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
+        result = AngularMathUnitMigration.migrateMathUnitAngular(input, false);
         assertEquals(input, result);
     }
 
@@ -226,7 +226,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, true);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, true);
         assertEquals(expected, result);
     }
 
@@ -257,7 +257,7 @@ class MathUnitAngularMigrationTest {
                 }
                 """;
         
-        String result = MathUnitAngularMigration.migrateMathUnitAngular(input, false);
+        String result = AngularMathUnitMigration.migrateMathUnitAngular(input, false);
         assertEquals(expected, result);
     }
 }
