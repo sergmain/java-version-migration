@@ -17,6 +17,7 @@
 package metaheuristic.java_version_migration.migrations;
 
 import lombok.extern.slf4j.Slf4j;
+import metaheuristic.java_version_migration.Globals;
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.MigrationUtils;
 import metaheuristic.java_version_migration.data.Content;
@@ -71,19 +72,19 @@ public class MigrateSynchronizedJava21 {
 
     public record Position(int start, int end, Type type) {};;
 
-    public static LockerType getLockerType(Migration.MigrationConfig cfg) {
-        final String type = MetaUtils.getValue(cfg.globals().metas, MIGRATE_SYNCHRONIZED_LOCKER);
+    public static LockerType getLockerType(Globals globals) {
+        final String type = MetaUtils.getValue(globals.metas, MIGRATE_SYNCHRONIZED_LOCKER);
         return type==null ? LockerType.ReentrantReadWriteLock : LockerType.valueOf(type);
     }
 
-    public static Content process(Migration.MigrationConfig cfg, String content) {
+    public static Content process(Migration.MigrationConfig cfg, Globals globals, String content) {
 
         Path path = cfg.path();
         List<Position> positions = positions(content, true);
         if (positions.isEmpty()) {
             return new Content(content, false);
         }
-        LockerType lockerType = getLockerType(cfg);
+        LockerType lockerType = getLockerType(globals);
         System.out.println(path.toString());
         positions.forEach(p->System.out.printf("\t%d %d %s\n", p.start, p.end, p.type));
 
@@ -99,11 +100,11 @@ public class MigrateSynchronizedJava21 {
             }
             switch (position.type) {
                 case method -> {
-                    code = processAsMethod(lockerType.lockerTypeCode, code, position, idx++, cfg.globals().offset);
+                    code = processAsMethod(lockerType.lockerTypeCode, code, position, idx++, globals.offset);
                     changed = true;
                 }
                 case object -> {
-                    code= processAsObject(code, position, idx++, cfg.globals().offset);
+                    code= processAsObject(code, position, idx++, globals.offset);
                     startOffset = position.start+1;
                 }
             }

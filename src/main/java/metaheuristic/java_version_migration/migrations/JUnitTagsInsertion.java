@@ -16,6 +16,7 @@
 
 package metaheuristic.java_version_migration.migrations;
 
+import metaheuristic.java_version_migration.Globals;
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.data.Content;
 import metaheuristic.java_version_migration.utils.MetaUtils;
@@ -39,20 +40,20 @@ public class JUnitTagsInsertion {
 
     private static Map<String, List<String>> cache = new HashMap<>();
 
-    public static Content process(Migration.MigrationConfig cfg, String content) {
-        String excludePackages = MetaUtils.getValue(cfg.globals().metas, "junitTagsExcludePackages");
+    public static Content process(Migration.MigrationConfig cfg, Globals globals, String content) {
+        String excludePackages = MetaUtils.getValue(globals.metas, "junitTagsExcludePackages");
         List<String> excludes = excludePackages==null || excludePackages.isBlank() ? List.of() : cache.computeIfAbsent(excludePackages, (k)-> Arrays.stream(StringUtils.split(k, ", ")).toList());
-        Path base  = Path.of(MetaUtils.getValue(cfg.globals().metas, "junitSrcBase"));
+        Path base  = Path.of(MetaUtils.getValue(globals.metas, "junitSrcBase"));
         boolean b = PathUtils.isEnd(cfg.path(), excludes, base);
         if (b) {
             return new Content(content, false);
         }
-        String tag = MetaUtils.getValue(cfg.globals().metas, "junitTagsName");
+        String tag = MetaUtils.getValue(globals.metas, "junitTagsName");
         if (tag==null || tag.isBlank()) {
             throw new IllegalStateException();
         }
 
-        String strategy = MetaUtils.getValue(cfg.globals().metas, "junitTagsStrategy");
+        String strategy = MetaUtils.getValue(globals.metas, "junitTagsStrategy");
         ExistTagStrategy existTagStrategy = (strategy==null || strategy.isBlank()) ? ExistTagStrategy.SKIP : to(strategy);
 
         String newContent = modify(content, tag, existTagStrategy);

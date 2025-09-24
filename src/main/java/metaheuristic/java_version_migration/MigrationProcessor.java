@@ -16,12 +16,14 @@
 
 package metaheuristic.java_version_migration;
 
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.data.Content;
 import org.apache.commons.io.file.PathUtils;
 import org.apache.commons.io.filefilter.FileFileFilter;
 import org.apache.commons.io.filefilter.IOFileFilter;
 import org.apache.commons.io.filefilter.SuffixFileFilter;
+import org.apache.commons.lang3.function.TriFunction;
 
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
@@ -29,10 +31,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static metaheuristic.java_version_migration.MigrationUtils.execStat;
@@ -75,20 +79,43 @@ public class MigrationProcessor {
             Migration.functions.stream()
                     .filter(f-> globals.startJavaVersion < f.version() && f.version() <= globals.targetJavaVersion)
                     .flatMap(f->f.functions().stream())
-                    .forEach(f-> changeContent(f, new Migration.MigrationConfig(path, globals)));
+                    .forEach(f-> changeContent(f, getCfg(path), globals));
 
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static void changeContent(BiFunction<Migration.MigrationConfig, String, Content> func, Migration.MigrationConfig cfg) {
+    @SneakyThrows
+    public static Migration.MigrationConfig getCfg(Path path) {
+        Path directory = path.getParent();
+
+        Map<Path, String> files;
+        try (var stream = Files.walk(directory, 1)) {
+            files = stream
+                .filter(Files::isRegularFile)
+                .collect(Collectors.toMap(
+                    p -> p,
+                    p -> {
+                        try {
+                            return Files.readString(p);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                ));
+        }
+
+        return new Migration.MigrationConfig(path, files);
+    }
+
+    public static void changeContent(TriFunction<Migration.MigrationConfig, Globals, String, Content> func, Migration.MigrationConfig cfg, Globals globals) {
         try {
             long mills = System.currentTimeMillis();
-            String content = Files.readString(cfg.path(), cfg.globals().getCharset());
-            Content newContent = func.apply(cfg, content);
+            String content = Files.readString(cfg.path(), globals.getCharset());
+            Content newContent = func.apply(cfg, globals, content);
             if (newContent.changed()) {
-                Files.writeString(cfg.path(), newContent.content(), cfg.globals().getCharset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                Files.writeString(cfg.path(), newContent.content(), globals.getCharset(), StandardOpenOption.SYNC, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                 System.out.println("\t\tprocessed for "+(System.currentTimeMillis() - mills));
             }
         } catch (Throwable th) {

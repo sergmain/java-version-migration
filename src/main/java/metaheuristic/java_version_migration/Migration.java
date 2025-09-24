@@ -18,7 +18,8 @@ package metaheuristic.java_version_migration;
 
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.data.Content;
-import metaheuristic.java_version_migration.migrations.*;
+import metaheuristic.java_version_migration.migrations.AngularMapGetMigration;
+import org.apache.commons.lang3.function.TriFunction;
 
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -38,12 +39,11 @@ public class Migration {
 
     /**
      * path - path to current file, which is processing rn
-     * globals - parameters from application.properties
      * files - Map of files with content in directory, where file referred in variable path, located: key - path to file, value - content of file
      */
-    public record MigrationConfig(Path path, Globals globals, Map<Path, String> files) {}
+    public record MigrationConfig(Path path, Map<Path, String> files) {}
 
-    public record MigrationFunctions(int version, List<BiFunction<Migration.MigrationConfig, String, Content>> functions) {}
+    public record MigrationFunctions(int version, List<TriFunction<MigrationConfig, Globals, String, Content>> functions) {}
 
     public static final List<MigrationFunctions> functions = Stream.of(
             new MigrationFunctions(21, List.of(
