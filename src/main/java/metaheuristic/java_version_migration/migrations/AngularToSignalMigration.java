@@ -16,6 +16,7 @@
 
 package metaheuristic.java_version_migration.migrations;
 
+import metaheuristic.java_version_migration.Globals;
 import metaheuristic.java_version_migration.Migration;
 import metaheuristic.java_version_migration.data.Content;
 
@@ -40,8 +41,8 @@ public class AngularToSignalMigration {
         **Problem:** I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
         
         =================
-        start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateMapGetAngular
-        and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateMapGetAngularTest
+        start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigration
+        and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigrationTest
         ================
         variable 'String content', which method migrateAngularToSignalMigration() will receive, will be always not null, no need in additional check.
         ================
@@ -50,7 +51,7 @@ public class AngularToSignalMigration {
         =============
         """;
 
-    public static Content process(Migration.MigrationConfig cfg, String content) {
+    public static Content process(Migration.MigrationConfig cfg, Globals globals, String content) {
         String newContent = migrateAngularToSignalMigration(cfg, content);
         Content result = new Content(newContent, !newContent.equals(content));
         return result;

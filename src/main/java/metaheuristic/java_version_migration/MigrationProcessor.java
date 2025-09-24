@@ -90,12 +90,12 @@ public class MigrationProcessor {
     public static Migration.MigrationConfig getCfg(Path path) {
         Path directory = path.getParent();
 
-        Map<Path, String> files;
+        Map<String, String> files;
         try (var stream = Files.walk(directory, 1)) {
             files = stream
                 .filter(Files::isRegularFile)
                 .collect(Collectors.toMap(
-                    p -> p,
+                    p -> p.getFileName().toString(),
                     p -> {
                         try {
                             return Files.readString(p);

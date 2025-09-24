@@ -39,9 +39,9 @@ public class Migration {
 
     /**
      * path - path to current file, which is processing rn
-     * files - Map of files with content in directory, where file referred in variable path, located: key - path to file, value - content of file
+     * files - Map of files with content in directory, where file referred in variable path, located: key - name of file without any path element; value - content of file
      */
-    public record MigrationConfig(Path path, Map<Path, String> files) {}
+    public record MigrationConfig(Path path, Map<String, String> files) {}
 
     public record MigrationFunctions(int version, List<TriFunction<MigrationConfig, Globals, String, Content>> functions) {}
 

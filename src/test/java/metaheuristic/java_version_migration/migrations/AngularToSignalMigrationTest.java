@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 /**
@@ -255,17 +254,17 @@ class AngularToSignalMigrationTest {
             tsPath.getParent().resolve(fileName.replace(".ts", ".html")) :
             Paths.get(fileName.replace(".ts", ".html"));
             
-        Map<Path, String> files = new HashMap<>();
-        files.put(tsPath, tsContent);
-        files.put(htmlPath, htmlContent);
+        Map<String, String> files = new HashMap<>();
+        files.put(fileName+".ts", tsContent);
+        files.put(fileName+".html", htmlContent);
         
         return new Migration.MigrationConfig(tsPath, files);
     }
     
     private Migration.MigrationConfig createConfigWithoutHtml(String fileName, String tsContent) {
         Path tsPath = Paths.get(fileName);
-        Map<Path, String> files = new HashMap<>();
-        files.put(tsPath, tsContent);
+        Map<String, String> files = new HashMap<>();
+        files.put(fileName, tsContent);
         
         return new Migration.MigrationConfig(tsPath, files);
     }
