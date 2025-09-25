@@ -98,7 +98,9 @@ class AngularToSignalMigrationTest {
         String expected = """
             import { computed } from '@angular/core';
             export class TestComponent {
-                filteredItems = computed(() => {return this.items.filter(item => item.active);});
+                filteredItems = computed(() => {
+                    return this.items.filter(item => item.active);
+                });
             }
             """;
         

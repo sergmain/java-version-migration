@@ -1,35 +1,75 @@
-================================================
+**Mandatory rule:** ================================================
 DO NO MAKE ANY CHANGES IN OTHER FILES!!!
-==============================================
-BEFORE STARTING, READ PROJECT'S INSTRUCTIONS CAREFULLY.
-by project's instructions I mean instruction in Claude, not in readme.md or any other file in repo
------------
-do your job in small steps, after each step make pause and wait for my 'go'
------------
-**Problem:** I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
 
-=================
+**General rules:** ==============================================
+
+- This is important instructions, when you make any decision, these instruction have topper priority.
+
+- follow ALL of instructions in this list with equal priority
+
+- DO NOT try to understand project structure
+
+- IMMEDIATELY access the specified classes and methods only
+
+- This is a Java 21, Maven based project.
+
+- Current development environment is Windows, so use PowerShell for execution of commands.
+
+
+- Currently, maven is configured in quiet mode. If you run test and it haven't returned any that means that test is ok.
+  When Maven is in quiet mode, NO OUTPUT == SUCCESS.
+  -- Empty response after `mvn test` = all tests passed
+  -- Only failures/errors produce output
+  -- Never interpret silence as failure or incomplete execution
+
+- for each command in powershell, add cls; before the actual command, like:
+  cls; mvn -version
+
+
+- Do  not run maven in verbose mode.
+
+- This maven-based project follows standard maven project directory structure, so source in /src dir
+
+- you have access to code base via MCP server. so write implementation and unit tests directly in code repository
+
+- after creating unit-tests, run one method (and fix it if needed) one by one.
+
+- you don't need to understand whole structure of project, just implement new functionality in specified method - you'll be provided with full class name, inclueding package.
+
+
+- because it's a Java 21, use text blocks where it's possible
+
+**Specific rules:** ==============================================
+
+do your job in small steps, after each step make pause and wait for my 'go'
+-----
+the first step must be verification that all unit tests cover all cases from provided 2 files
+-----
+Problem: I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
+
+-----
 start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigration
 and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigrationTest
-================
+-----
 variable 'String content', which method migrateAngularToSignalMigration() will receive, will be always not null, no need in additional check.
-================
+-----
 as i understand, for better decision, this migration method must have access to other files in dir, specifically, .html, to understand what to migrate to signal.
 use Map<String, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing required files
-=============
+-----
 
 this is a continue of coding of this method and tests, so check the current implementation of method/tests and make needed adjustments
-=============
+-----
 
 also, there are 2 files (.ts and .html) which i want to migrate to signal by using this method, but right now nothing was changed when I run migrateAngularToSignalMigrationTest()
 
-============
+-----
 when you run tests in maven, run test one-by-one. don't run all tests in AngularToSignalMigration at the same time
 
-
+-----
 tests which are failing at this moment:
 
-migrateAngularToSignalMigrationTest_mixedSignalAndNonSignal()
 migrateAngularToSignalMigrationTest_realWorldAngularComponent()
-migrateAngularToSignalMigrationTest_propertyBinding()
 migrateAngularToSignalMigrationTest_eventHandlers()
+migrateAngularToSignalMigrationTest_propertyAssignment()
+
+==============================================

@@ -44,32 +44,30 @@ public class AngularToSignalMigration {
         String result = content;
         boolean needsSignalImport = false;
         boolean needsComputedImport = false;
+        java.util.Set<String> signalProperties = new java.util.HashSet<>();
         
         // Get corresponding HTML file content for analysis
         String htmlContent = getHtmlContent(cfg);
         
         // Pattern 1: Convert simple properties used in templates to signals
-        // Example: private _data: any[] = []; -> private _data = signal<any[]>([]);
-        result = convertPropertiesToSignals(result, htmlContent);
-        if (!result.equals(content)) {
+        String beforeSignals = result;
+        result = convertPropertiesToSignals(result, htmlContent, signalProperties);
+        if (!result.equals(beforeSignals)) {
             needsSignalImport = true;
         }
         
-        // Pattern 2: Convert getter methods to computed signals
-        // Example: get items() { return this._items.filter(...); } -> items = computed(() => this._items().filter(...));
+        // Pattern 2: Update property usage in method bodies BEFORE converting getters
+        result = updatePropertyUsageInMethods(result, signalProperties);
+        
+        // Pattern 3: Convert getter methods to computed signals  
         String beforeComputed = result;
         result = convertGettersToComputed(result, htmlContent);
         if (!result.equals(beforeComputed)) {
             needsComputedImport = true;
         }
         
-        // Pattern 3: Update method calls that modify properties to use signal updates
-        // Example: this.items = [...]; -> this.items.set([...]);
-        result = convertPropertyAssignments(result);
-        
-        // Pattern 4: Update template usage patterns in TypeScript code
-        // Example: this.property -> this.property()
-        result = updatePropertyUsage(result);
+        // Pattern 4: Update method calls that modify properties to use signal updates
+        result = convertPropertyAssignments(result, signalProperties);
         
         // Add necessary imports at the top
         result = addSignalImports(result, needsSignalImport, needsComputedImport);
@@ -88,11 +86,32 @@ public class AngularToSignalMigration {
         return "";
     }
     
-    private static String convertPropertiesToSignals(String content, String htmlContent) {
+    private static String convertPropertiesToSignals(String content, String htmlContent, java.util.Set<String> signalProperties) {
         String result = content;
         
+        // First, find all getters used in the template
+        Pattern getterPattern = Pattern.compile("(?s)get\\s+(\\w+)\\(\\)\\s*\\{([^}]+)\\}");
+        Matcher getterMatcher = getterPattern.matcher(content);
+        java.util.Set<String> gettersUsedInTemplate = new java.util.HashSet<>();
+        java.util.Set<String> propertiesUsedInGetters = new java.util.HashSet<>();
+        
+        while (getterMatcher.find()) {
+            String getterName = getterMatcher.group(1);
+            String getterBody = getterMatcher.group(2);
+            
+            if (isPropertyUsedInTemplate(getterName, htmlContent)) {
+                gettersUsedInTemplate.add(getterName);
+                // Extract properties used in this getter
+                Pattern propPattern = Pattern.compile("this\\.(\\w+)(?!\\()");
+                Matcher propMatcher = propPattern.matcher(getterBody);
+                while (propMatcher.find()) {
+                    propertiesUsedInGetters.add(propMatcher.group(1));
+                }
+            }
+        }
+        
         // Pattern: private/public property = value; -> property = signal(value);
-        // Only convert properties that are used in HTML templates
+        // Convert properties that are used in HTML templates OR used in getters that are used in templates
         Pattern pattern = Pattern.compile("(?m)^(\\s*)((?:private|public|protected)\\s+)(\\w+)(:?\\s*:\\s*[^=]+)?\\s*=\\s*([^;]+);");
         Matcher matcher = pattern.matcher(result);
         StringBuilder sb = new StringBuilder();
@@ -104,8 +123,9 @@ public class AngularToSignalMigration {
             String typeAnnotation = matcher.group(4) != null ? matcher.group(4) : "";
             String value = matcher.group(5);
             
-            // Check if this property is used in the HTML template
-            if (isPropertyUsedInTemplate(propertyName, htmlContent)) {
+            // Check if this property is used in the HTML template or in getters used in templates
+            if (isPropertyUsedInTemplate(propertyName, htmlContent) || propertiesUsedInGetters.contains(propertyName)) {
+                signalProperties.add(propertyName); // Track this as a signal property
                 // Extract type if present
                 String signalType = "";
                 if (typeAnnotation != null && !typeAnnotation.trim().isEmpty()) {
@@ -126,19 +146,36 @@ public class AngularToSignalMigration {
     private static String convertGettersToComputed(String content, String htmlContent) {
         String result = content;
         
-        // Pattern: get propertyName() { return ...; } -> propertyName = computed(() => { return ...; });
+        // Pattern: get propertyName() { body } -> propertyName = computed(() => { body });
         Pattern pattern = Pattern.compile("(?s)get\\s+(\\w+)\\(\\)\\s*\\{([^}]+)\\}");
         Matcher matcher = pattern.matcher(result);
         StringBuilder sb = new StringBuilder();
         
         while (matcher.find()) {
             String propertyName = matcher.group(1);
-            String body = matcher.group(2).trim();
+            String body = matcher.group(2);
             
             // Check if this getter is used in the HTML template
             if (isPropertyUsedInTemplate(propertyName, htmlContent)) {
-                String replacement = propertyName + " = computed(() => {" + body + "});";
-                matcher.appendReplacement(sb, replacement);
+                // Extract and preserve the original body structure
+                // Looking for the pattern where body starts with whitespace + return
+                String trimmedBody = body.trim();
+                
+                // Check if it's a simple single return statement
+                if (trimmedBody.startsWith("return ")) {
+                    // Format as multiline computed
+                    String returnStatement = trimmedBody.substring(7); // Remove "return "
+                    if (returnStatement.endsWith(";")) {
+                        returnStatement = returnStatement.substring(0, returnStatement.length() - 1); // Remove trailing semicolon
+                    }
+                    
+                    String replacement = propertyName + " = computed(() => {\n        return " + returnStatement + ";\n    });";
+                    matcher.appendReplacement(sb, replacement);
+                } else {
+                    // Keep original body structure  
+                    String replacement = propertyName + " = computed(() => {" + body + "});";
+                    matcher.appendReplacement(sb, replacement);
+                }
             } else {
                 matcher.appendReplacement(sb, matcher.group(0)); // No change
             }
@@ -148,11 +185,11 @@ public class AngularToSignalMigration {
         return sb.toString();
     }
     
-    private static String convertPropertyAssignments(String content) {
+    private static String convertPropertyAssignments(String content, java.util.Set<String> signalProperties) {
         String result = content;
         
         // Pattern: this.propertyName = value; -> this.propertyName.set(value);
-        // Only convert if the property looks like a signal (has parentheses when accessed)
+        // Only convert if the property was converted to a signal
         Pattern pattern = Pattern.compile("(?m)this\\.(\\w+)\\s*=\\s*([^;]+);");
         Matcher matcher = pattern.matcher(result);
         StringBuilder sb = new StringBuilder();
@@ -161,8 +198,8 @@ public class AngularToSignalMigration {
             String propertyName = matcher.group(1);
             String value = matcher.group(2);
             
-            // Check if this property is used as a signal elsewhere (has () calls)
-            if (content.contains("this." + propertyName + "()")) {
+            // Check if this property was converted to a signal
+            if (signalProperties.contains(propertyName)) {
                 String replacement = "this." + propertyName + ".set(" + value + ");";
                 matcher.appendReplacement(sb, replacement);
             } else {
@@ -174,13 +211,32 @@ public class AngularToSignalMigration {
         return sb.toString();
     }
     
-    private static String updatePropertyUsage(String content) {
+    private static String updatePropertyUsageInMethods(String content, java.util.Set<String> signalProperties) {
         String result = content;
         
-        // Pattern: this.property in contexts where it should be this.property()
-        // This is complex and needs careful analysis to avoid breaking non-signal properties
+        // Only update property usage within getter method bodies, not assignments
+        Pattern getterPattern = Pattern.compile("(?s)get\\s+(\\w+)\\(\\)\\s*\\{([^}]+)\\}");
+        Matcher getterMatcher = getterPattern.matcher(result);
+        StringBuilder sb = new StringBuilder();
         
-        return result;
+        while (getterMatcher.find()) {
+            String getterName = getterMatcher.group(1);
+            String body = getterMatcher.group(2);
+            
+            // Update signal property usage in this getter body
+            String updatedBody = body;
+            for (String signalProp : signalProperties) {
+                // Convert this.signalProp to this.signalProp() - but not in assignments
+                Pattern propPattern = Pattern.compile("\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=)");
+                updatedBody = propPattern.matcher(updatedBody).replaceAll("this." + signalProp + "()");
+            }
+            
+            String replacement = "get " + getterName + "() {" + updatedBody + "}";
+            getterMatcher.appendReplacement(sb, replacement);
+        }
+        getterMatcher.appendTail(sb);
+        
+        return sb.toString();
     }
     
     private static boolean isPropertyUsedInTemplate(String propertyName, String htmlContent) {
@@ -192,10 +248,17 @@ public class AngularToSignalMigration {
         return htmlContent.contains("{{ " + propertyName) ||
                htmlContent.contains("{{" + propertyName) ||
                htmlContent.contains("[" + propertyName + "]") ||
+               htmlContent.contains("[(ngModel)]=\"" + propertyName + "\"") ||
                htmlContent.contains("*ngFor") && htmlContent.contains(propertyName) ||
                htmlContent.contains("*ngIf") && htmlContent.contains(propertyName) ||
                htmlContent.contains("(click)") && htmlContent.contains(propertyName) ||
-               htmlContent.contains("(change)") && htmlContent.contains(propertyName);
+               htmlContent.contains("(change)") && htmlContent.contains(propertyName) ||
+               htmlContent.contains("[disabled]=\"" + propertyName) ||
+               htmlContent.contains("[class.") && htmlContent.contains(propertyName) ||
+               htmlContent.contains("[style.") && htmlContent.contains(propertyName) ||
+               htmlContent.contains("[attr.") && htmlContent.contains(propertyName) ||
+               htmlContent.contains("\" + propertyName + \"") ||
+               htmlContent.matches(".*\\b" + propertyName + "\\b.*");
     }
     
     private static String addSignalImports(String content, boolean needsSignal, boolean needsComputed) {
