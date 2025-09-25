@@ -216,10 +216,10 @@ class AngularToSignalMigrationTest {
             import { signal } from '@angular/core';
             export class TestComponent {
                 private items = signal<Item[]>([]);
-                private data: any = null;
+                private data = signal<any>(null);
                 
                 updateData() {
-                    this.data = { updated: true };
+                    this.data.set({ updated: true });
                 }
             }
             """;

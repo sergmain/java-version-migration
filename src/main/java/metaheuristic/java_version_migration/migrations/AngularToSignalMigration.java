@@ -128,7 +128,8 @@ public class AngularToSignalMigration {
             
             // Check if this property should be converted to signal
             if (isPropertyUsedInTemplate(propertyName, htmlContent) || 
-                propertiesUsedInGetters.contains(propertyName)) {
+                propertiesUsedInGetters.contains(propertyName) ||
+                propertiesModifiedInEventHandlers.contains(propertyName)) {
                 signalProperties.add(propertyName); // Track this as a signal property
                 // Extract type if present
                 String signalType = "";
