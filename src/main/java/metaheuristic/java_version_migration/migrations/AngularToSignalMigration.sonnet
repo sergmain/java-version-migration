@@ -1,6 +1,10 @@
 **Mandatory rule:** ================================================
 DO NO MAKE ANY CHANGES IN OTHER FILES!!!
 
+DO YOUR JOB IN SMALL STEPS, AFTER EACH STEP MAKE PAUSE AND WAIT FOR MY 'GO', BECAUSE THIS 8th CHAT AND YOU STUCK IN THE MIDDLE OF CHAT
+PAUSE MEANS YOU STOP CODING AND TRANSFER FOCUS TO ME
+
+
 **General rules:** ==============================================
 
 - This is important instructions, when you make any decision, these instruction have topper priority.
@@ -41,11 +45,12 @@ DO NO MAKE ANY CHANGES IN OTHER FILES!!!
 
 **Specific rules:** ==============================================
 
-do your job in small steps, after each step make pause and wait for my 'go'
------
-the first step must be verification that all unit tests cover all cases from provided 2 files
 -----
 Problem: I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
+
+-----
+-----
+the first step must be verification that all unit tests cover all cases from provided 2 files
 
 -----
 start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigration
@@ -57,10 +62,7 @@ as i understand, for better decision, this migration method must have access to 
 use Map<String, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing required files
 -----
 
-this is a continue of coding of this method and tests, so check the current implementation of method/tests and make needed adjustments
------
-
-also, there are 2 files (.ts and .html) which i want to migrate to signal by using this method, but right now nothing was changed when I run migrateAngularToSignalMigrationTest()
+this is a continue of coding of this method and tests, so check the current implementation of method/tests and make needed refactoring
 
 -----
 when you run tests in maven, run test one-by-one. don't run all tests in AngularToSignalMigration at the same time
@@ -68,8 +70,6 @@ when you run tests in maven, run test one-by-one. don't run all tests in Angular
 -----
 tests which are failing at this moment:
 
-migrateAngularToSignalMigrationTest_realWorldAngularComponent()
 migrateAngularToSignalMigrationTest_eventHandlers()
-migrateAngularToSignalMigrationTest_propertyAssignment()
 
 ==============================================

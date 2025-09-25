@@ -110,8 +110,11 @@ public class AngularToSignalMigration {
             }
         }
         
+        // Find event handler methods and properties modified in them
+        java.util.Set<String> propertiesModifiedInEventHandlers = findPropertiesModifiedInEventHandlers(content, htmlContent);
+        
         // Pattern: private/public property = value; -> property = signal(value);
-        // Convert properties that are used in HTML templates OR used in getters that are used in templates
+        // Convert properties that are used in HTML templates OR used in getters OR modified in event handlers
         Pattern pattern = Pattern.compile("(?m)^(\\s*)((?:private|public|protected)\\s+)(\\w+)(:?\\s*:\\s*[^=]+)?\\s*=\\s*([^;]+);");
         Matcher matcher = pattern.matcher(result);
         StringBuilder sb = new StringBuilder();
@@ -123,8 +126,9 @@ public class AngularToSignalMigration {
             String typeAnnotation = matcher.group(4) != null ? matcher.group(4) : "";
             String value = matcher.group(5);
             
-            // Check if this property is used in the HTML template or in getters used in templates
-            if (isPropertyUsedInTemplate(propertyName, htmlContent) || propertiesUsedInGetters.contains(propertyName)) {
+            // Check if this property should be converted to signal
+            if (isPropertyUsedInTemplate(propertyName, htmlContent) || 
+                propertiesUsedInGetters.contains(propertyName)) {
                 signalProperties.add(propertyName); // Track this as a signal property
                 // Extract type if present
                 String signalType = "";
@@ -188,8 +192,18 @@ public class AngularToSignalMigration {
     private static String convertPropertyAssignments(String content, java.util.Set<String> signalProperties) {
         String result = content;
         
+        // First, detect additional signal properties by looking for signal call patterns in the code
+        java.util.Set<String> detectedSignalProperties = new java.util.HashSet<>(signalProperties);
+        
+        // Look for patterns like this.propertyName() which indicate the property is a signal
+        Pattern signalCallPattern = Pattern.compile("\\bthis\\.(\\w+)\\(\\)");
+        Matcher signalCallMatcher = signalCallPattern.matcher(content);
+        while (signalCallMatcher.find()) {
+            detectedSignalProperties.add(signalCallMatcher.group(1));
+        }
+        
         // Pattern: this.propertyName = value; -> this.propertyName.set(value);
-        // Only convert if the property was converted to a signal
+        // Only convert if the property was converted to a signal or detected as signal usage
         Pattern pattern = Pattern.compile("(?m)this\\.(\\w+)\\s*=\\s*([^;]+);");
         Matcher matcher = pattern.matcher(result);
         StringBuilder sb = new StringBuilder();
@@ -198,8 +212,8 @@ public class AngularToSignalMigration {
             String propertyName = matcher.group(1);
             String value = matcher.group(2);
             
-            // Check if this property was converted to a signal
-            if (signalProperties.contains(propertyName)) {
+            // Check if this property was converted to a signal or detected as signal usage
+            if (detectedSignalProperties.contains(propertyName)) {
                 String replacement = "this." + propertyName + ".set(" + value + ");";
                 matcher.appendReplacement(sb, replacement);
             } else {
@@ -214,29 +228,63 @@ public class AngularToSignalMigration {
     private static String updatePropertyUsageInMethods(String content, java.util.Set<String> signalProperties) {
         String result = content;
         
-        // Only update property usage within getter method bodies, not assignments
-        Pattern getterPattern = Pattern.compile("(?s)get\\s+(\\w+)\\(\\)\\s*\\{([^}]+)\\}");
-        Matcher getterMatcher = getterPattern.matcher(result);
+        // Update property usage within all method bodies, not just getters
+        Pattern methodPattern = Pattern.compile("(?s)((?:get\\s+)?\\w+\\([^)]*\\)\\s*\\{)([^}]+)(\\})");
+        Matcher methodMatcher = methodPattern.matcher(result);
         StringBuilder sb = new StringBuilder();
         
-        while (getterMatcher.find()) {
-            String getterName = getterMatcher.group(1);
-            String body = getterMatcher.group(2);
+        while (methodMatcher.find()) {
+            String methodStart = methodMatcher.group(1);
+            String body = methodMatcher.group(2);
+            String methodEnd = methodMatcher.group(3);
             
-            // Update signal property usage in this getter body
+            // Update signal property usage in this method body
             String updatedBody = body;
             for (String signalProp : signalProperties) {
-                // Convert this.signalProp to this.signalProp() - but not in assignments
-                Pattern propPattern = Pattern.compile("\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=)");
+                // Convert this.signalProp to this.signalProp() - but not in assignments or when already called
+                Pattern propPattern = Pattern.compile("\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=|\\s*[.]set\\()");
                 updatedBody = propPattern.matcher(updatedBody).replaceAll("this." + signalProp + "()");
             }
             
-            String replacement = "get " + getterName + "() {" + updatedBody + "}";
-            getterMatcher.appendReplacement(sb, replacement);
+            String replacement = methodStart + updatedBody + methodEnd;
+            methodMatcher.appendReplacement(sb, replacement);
         }
-        getterMatcher.appendTail(sb);
+        methodMatcher.appendTail(sb);
         
         return sb.toString();
+    }
+    
+    private static java.util.Set<String> findPropertiesModifiedInEventHandlers(String content, String htmlContent) {
+        java.util.Set<String> propertiesModifiedInEventHandlers = new java.util.HashSet<>();
+        
+        if (htmlContent == null || htmlContent.trim().isEmpty()) {
+            return propertiesModifiedInEventHandlers;
+        }
+        
+        // Find event handler method names from HTML
+        java.util.Set<String> eventHandlerMethods = new java.util.HashSet<>();
+        Pattern eventPattern = Pattern.compile("\\([a-zA-Z]+\\)=\"([a-zA-Z]\\w*)\\([^)]*\\)\"");
+        Matcher eventMatcher = eventPattern.matcher(htmlContent);
+        while (eventMatcher.find()) {
+            eventHandlerMethods.add(eventMatcher.group(1));
+        }
+        
+        // For each event handler method, find properties that are assigned in it
+        for (String methodName : eventHandlerMethods) {
+            Pattern methodPattern = Pattern.compile("(?s)" + methodName + "\\([^)]*\\)\\s*\\{([^}]+)\\}");
+            Matcher methodMatcher = methodPattern.matcher(content);
+            if (methodMatcher.find()) {
+                String methodBody = methodMatcher.group(1);
+                // Find property assignments in this method
+                Pattern assignmentPattern = Pattern.compile("\\bthis\\.(\\w+)\\s*=");
+                Matcher assignmentMatcher = assignmentPattern.matcher(methodBody);
+                while (assignmentMatcher.find()) {
+                    propertiesModifiedInEventHandlers.add(assignmentMatcher.group(1));
+                }
+            }
+        }
+        
+        return propertiesModifiedInEventHandlers;
     }
     
     private static boolean isPropertyUsedInTemplate(String propertyName, String htmlContent) {
