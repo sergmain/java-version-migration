@@ -49,6 +49,31 @@ PAUSE MEANS YOU STOP CODING AND TRANSFER FOCUS TO ME
 Problem: I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
 
 -----
+Missing signal migrations:
+
+
+// Replace these properties with signals:
+activeField = signal<Cell | undefined>(undefined);
+cols = signal<number>(MIN_SIZE);
+rows = signal<number>(MIN_SIZE);
+isGenerating = signal<boolean>(false);
+showDigits = signal<boolean>(true);
+kakuro = signal<CellMatrix | undefined>(undefined);
+
+// Update computed properties:
+currentRow = computed(() => {
+  const field = this.activeField();
+  const matrix = this.kakuro();
+  if (!field || !matrix) return -1;
+  return matrix.cells.findIndex(row => row.indexOf(field) !== -1);
+});
+
+currentCol = computed(() => {
+  const field = this.activeField();
+  const row = this.currentRow();
+  if (!field || row === -1) return -1;
+  return this.kakuro()!.cells[row].indexOf(field);
+});
 -----
 the first step must be verification that all unit tests cover all cases from provided 2 files
 
@@ -58,7 +83,7 @@ and creating unit-tests in metaheuristic.java_version_migration.migrations.Angul
 -----
 variable 'String content', which method migrateAngularToSignalMigration() will receive, will be always not null, no need in additional check.
 -----
-as i understand, for better decision, this migration method must have access to other files in dir, specifically, .html, to understand what to migrate to signal.
+for better decision, this migration method must have access to other files in dir, specifically, .html, to understand what to migrate to signal.
 use Map<String, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing required files
 -----
 
@@ -73,6 +98,8 @@ when you run tests in maven, run test one-by-one. don't run all tests in Angular
 -----
 tests which are failing at this moment:
 
-metaheuristic.java_version_migration.migrations.AngularToSignalMigrationTest#migrateAngularToSignalMigrationTest_regexReplacementWithCurlyBraces
+migrateAngularToSignalMigrationTest_kakuroDesignComponent()
+migrateAngularToSignalMigrationTest_realWorldEscapeSequences()
+migrateAngularToSignalMigrationTest_complexTypes()
 
 ==============================================

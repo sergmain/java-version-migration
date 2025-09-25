@@ -633,6 +633,110 @@ class AngularToSignalMigrationTest {
         assertEquals(expected, result);
     }
 
+    @Test
+    public void migrateAngularToSignalMigrationTest_kakuroDesignComponent() {
+        String htmlContent = """
+            <div>
+                <mat-slider [(ngModel)]="cols"></mat-slider>
+                <mat-slider [(ngModel)]="rows"></mat-slider>
+                <button (click)="generate()" [disabled]="isGenerating">Generate</button>
+                <mat-slide-toggle [(ngModel)]="showDigits">Show Digits</mat-slide-toggle>
+                <puzzle-grid [kakuro]="kakuro" [activeField]="activeField" (activeFieldChange)="onActiveField($event)"></puzzle-grid>
+                <div>Current position: row {{ currentRow }}, col {{ currentCol }}</div>
+            </div>
+            """;
+
+        String tsContent = """
+            const MIN_SIZE: number = 3;
+
+            export class KakuroDesignComponent {
+                activeField?: Cell;
+
+                kakuro: CellMatrix;
+
+                cols: number = MIN_SIZE;
+                rows: number = MIN_SIZE;
+                isGenerating: boolean = false;
+
+                showDigits: boolean = true;
+
+                get currentRow(): number {
+                    return this.kakuro.cells.findIndex(row => row.indexOf(this.activeField) !== -1);
+                }
+
+                get currentCol(): number {
+                    if (!this.activeField || this.currentRow === -1) {
+                        return -1;
+                    }
+
+                    return this.kakuro.cells[this.currentRow].indexOf(this.activeField);
+                }
+
+                generate() {
+                    this.isGenerating = true;
+                    // generation logic
+                    this.isGenerating = false;
+                }
+
+                onActiveField(cell: CellWithRowCol) {
+                    this.activeField = cell.cell;
+                }
+
+                updateColumns() {
+                    this.cols = this.cols + 1;
+                }
+            }
+            """;
+
+        Migration.MigrationConfig cfg = createConfig("kakuro-design.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+
+        String expected = """
+            import { signal, computed } from '@angular/core';
+            const MIN_SIZE: number = 3;
+
+            export class KakuroDesignComponent {
+                activeField = signal<Cell | undefined>(undefined);
+
+                kakuro = signal<CellMatrix | undefined>(undefined);
+
+                cols = signal<number>(MIN_SIZE);
+                rows = signal<number>(MIN_SIZE);
+                isGenerating = signal<boolean>(false);
+
+                showDigits = signal<boolean>(true);
+
+                currentRow = computed(() => {
+                    return this.kakuro()?.cells.findIndex(row => row.indexOf(this.activeField()) !== -1) ?? -1;
+                });
+
+                currentCol = computed(() => {
+                    if (!this.activeField() || this.currentRow() === -1) {
+                        return -1;
+                    }
+
+                    return this.kakuro()?.cells[this.currentRow()]?.indexOf(this.activeField()) ?? -1;
+                });
+
+                generate() {
+                    this.isGenerating.set(true);
+                    // generation logic
+                    this.isGenerating.set(false);
+                }
+
+                onActiveField(cell: CellWithRowCol) {
+                    this.activeField.set(cell.cell);
+                }
+
+                updateColumns() {
+                    this.cols.set(this.cols() + 1);
+                }
+            }
+            """;
+
+        assertEquals(expected, result);
+    }
+
     private Migration.MigrationConfig createConfig(String fileName, String tsContent, String htmlContent) {
         Path tsPath = Paths.get(fileName);
         String baseName = tsPath.getFileName().toString().substring(0, fileName.length() - 3);

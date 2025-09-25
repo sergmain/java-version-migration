@@ -110,78 +110,87 @@ public class AngularToSignalMigration {
         // Find event handler methods and properties modified in them
         java.util.Set<String> propertiesModifiedInEventHandlers = findPropertiesModifiedInEventHandlers(content, htmlContent);
         
-        // Pattern: private/public property = value; -> property = signal(value);
-        // Convert properties that are used in HTML templates OR used in getters OR modified in event handlers
-        Pattern pattern = Pattern.compile("(?m)^(\\s*)((?:private|public|protected)\\s+)(\\w+)(:?\\s*:\\s*[^=]+)?\\s*=\\s*([^;]+);");
-        Matcher matcher = pattern.matcher(result);
+        // Process property declarations in correct order to avoid conflicts
+        
+        // First handle typed properties with initializers: property: Type = value;
+        Pattern typedWithInitPattern = Pattern.compile("(?m)^(\\s*)((?:private|public|protected)\\s+)?(\\w+)\\s*:\\s*([^=\\n;]+?)\\s*=\\s*([^;\\n]+);");
+        Matcher typedWithInitMatcher = typedWithInitPattern.matcher(result);
         StringBuilder sb = new StringBuilder();
         
-        while (matcher.find()) {
-            String indent = matcher.group(1);
-            String visibility = matcher.group(2);
-            String propertyName = matcher.group(3);
-            String typeAnnotation = matcher.group(4) != null ? matcher.group(4) : "";
-            String value = matcher.group(5);
+        while (typedWithInitMatcher.find()) {
+            String indent = typedWithInitMatcher.group(1);
+            String visibility = typedWithInitMatcher.group(2) != null ? typedWithInitMatcher.group(2) : "";
+            String propertyName = typedWithInitMatcher.group(3);
+            String type = typedWithInitMatcher.group(4).trim();
+            String value = typedWithInitMatcher.group(5).trim();
             
-            // Check if this property should be converted to signal
             boolean shouldConvert = isPropertyUsedInTemplate(propertyName, htmlContent) || 
                                   propertiesUsedInGetters.contains(propertyName) ||
                                   propertiesModifiedInEventHandlers.contains(propertyName);
             
             if (shouldConvert) {
-                signalProperties.add(propertyName); // Track this as a signal property
-                // Extract type if present
-                String signalType = "";
-                if (typeAnnotation != null && !typeAnnotation.trim().isEmpty()) {
-                    String type = typeAnnotation.substring(1).trim(); // Remove ':'
-                    signalType = "<" + type + ">";
-                }
-                String replacement = indent + visibility + propertyName + " = signal" + signalType + "(" + value + ");";
-                matcher.appendReplacement(sb, replacement);
+                signalProperties.add(propertyName);
+                String replacement = indent + visibility + propertyName + " = signal<" + type + ">(" + value + ");";
+                typedWithInitMatcher.appendReplacement(sb, replacement);
             } else {
-                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0))); // No change
+                typedWithInitMatcher.appendReplacement(sb, Matcher.quoteReplacement(typedWithInitMatcher.group(0)));
             }
         }
-        matcher.appendTail(sb);
+        typedWithInitMatcher.appendTail(sb);
+        result = sb.toString();
         
-        return sb.toString();
+        // Then handle property declarations without initializers: property: Type; or property?: Type;
+        Pattern declarationPattern = Pattern.compile("(?m)^(\\s*)((?:private|public|protected)\\s+)?(\\w+)(\\??)\\s*:\\s*([^=;\\n]+);");
+        Matcher declarationMatcher = declarationPattern.matcher(result);
+        StringBuilder sb2 = new StringBuilder();
+        
+        while (declarationMatcher.find()) {
+            String indent = declarationMatcher.group(1);
+            String visibility = declarationMatcher.group(2) != null ? declarationMatcher.group(2) : "";
+            String propertyName = declarationMatcher.group(3);
+            String optional = declarationMatcher.group(4);
+            String type = declarationMatcher.group(5).trim();
+            
+            boolean shouldConvert = isPropertyUsedInTemplate(propertyName, htmlContent) || 
+                                  propertiesUsedInGetters.contains(propertyName) ||
+                                  propertiesModifiedInEventHandlers.contains(propertyName);
+            
+            if (shouldConvert) {
+                signalProperties.add(propertyName);
+                String signalType = optional.equals("?") ? type + " | undefined" : type + " | undefined";
+                String replacement = indent + visibility + propertyName + " = signal<" + signalType + ">(undefined);";
+                declarationMatcher.appendReplacement(sb2, replacement);
+            } else {
+                declarationMatcher.appendReplacement(sb2, Matcher.quoteReplacement(declarationMatcher.group(0)));
+            }
+        }
+        declarationMatcher.appendTail(sb2);
+        
+        return sb2.toString();
     }
     
     private static String convertGettersToComputed(String content, String htmlContent) {
         String result = content;
         
-        // Pattern: get propertyName() { body } -> propertyName = computed(() => { body });
-        Pattern pattern = Pattern.compile("(?s)get\\s+(\\w+)\\(\\)\\s*\\{([^}]+)\\}");
+        // Pattern: get propertyName(): ReturnType { body } -> propertyName = computed(() => { body });
+        // Make the return type optional to handle cases without explicit return types
+        Pattern pattern = Pattern.compile("(?s)(\\s*)get\\s+(\\w+)\\(\\)(?:\\s*:\\s*([^\\{]*?))?\\s*\\{([^}]+)\\}");
         Matcher matcher = pattern.matcher(result);
         StringBuilder sb = new StringBuilder();
         
         while (matcher.find()) {
-            String propertyName = matcher.group(1);
-            String body = matcher.group(2);
+            String indent = matcher.group(1);
+            String propertyName = matcher.group(2);
+            String returnType = matcher.group(3); // May be null
+            String body = matcher.group(4);
             
-            // Check if this getter is used in the HTML template
             if (isPropertyUsedInTemplate(propertyName, htmlContent)) {
-                // Extract and preserve the original body structure
-                // Looking for the pattern where body starts with whitespace + return
-                String trimmedBody = body.trim();
-                
-                // Check if it's a simple single return statement
-                if (trimmedBody.startsWith("return ")) {
-                    // Format as multiline computed
-                    String returnStatement = trimmedBody.substring(7); // Remove "return "
-                    if (returnStatement.endsWith(";")) {
-                        returnStatement = returnStatement.substring(0, returnStatement.length() - 1); // Remove trailing semicolon
-                    }
-                    
-                    String replacement = propertyName + " = computed(() => {\n        return " + returnStatement + ";\n    });";
-                    matcher.appendReplacement(sb, replacement);
-                } else {
-                    // Keep original body structure  
-                    String replacement = propertyName + " = computed(() => {" + body + "});";
-                    matcher.appendReplacement(sb, replacement);
-                }
+                // Transform property references in the getter body
+                String transformedBody = transformPropertyReferencesInGetterBody(body);
+                String replacement = indent + propertyName + " = computed(() => {" + transformedBody + "});";
+                matcher.appendReplacement(sb, replacement);
             } else {
-                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0))); // No change
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0)));
             }
         }
         matcher.appendTail(sb);
@@ -189,11 +198,52 @@ public class AngularToSignalMigration {
         return sb.toString();
     }
     
+    private static String transformPropertyReferencesInGetterBody(String body) {
+        String result = body;
+        
+        // DEBUG: Print the body to see what we're working with
+        System.out.println("Transforming body: " + body);
+        
+        // Step by step transformations
+        
+        // 1. Transform this.activeField -> this.activeField() 
+        result = result.replaceAll("\\bthis\\.activeField\\b(?!\\()", "this.activeField()");
+        
+        // 2. Transform this.currentRow -> this.currentRow()
+        result = result.replaceAll("\\bthis\\.currentRow\\b(?!\\()", "this.currentRow()");
+        
+        // 3. Transform this.kakuro.cells -> this.kakuro()?.cells
+        result = result.replaceAll("\\bthis\\.kakuro\\.cells\\b", "this.kakuro()?.cells");
+        
+        // 4. Transform array access to use optional chaining  
+        result = result.replaceAll("\\bcells\\[([^\\]]+)\\]\\.indexOf", "cells[$1]?.indexOf");
+        
+        // 5. Add ?? -1 to findIndex
+        if (result.contains("findIndex")) {
+            result = result.replaceAll("(findIndex\\([^)]+\\))(?!\\s*\\?\\?)", "$1 ?? -1");
+        }
+        
+        // 6. Add ?? -1 to indexOf at end of statements  
+        result = result.replaceAll("(indexOf\\([^)]+\\));", "$1 ?? -1;");
+        
+        // DEBUG: Print result
+        System.out.println("Transformed to: " + result);
+        
+        return result;
+    }
+    
     private static String convertPropertyAssignments(String content, java.util.Set<String> signalProperties) {
         String result = content;
         
-        // First, detect additional signal properties by looking for signal call patterns in the code
+        // First, detect additional signal properties by looking for existing signal() calls in the code
         java.util.Set<String> detectedSignalProperties = new java.util.HashSet<>(signalProperties);
+        
+        // Look for patterns like "property = signal(" which indicate the property is already a signal
+        Pattern signalDeclarationPattern = Pattern.compile("(\\w+)\\s*=\\s*signal");
+        Matcher signalDeclarationMatcher = signalDeclarationPattern.matcher(content);
+        while (signalDeclarationMatcher.find()) {
+            detectedSignalProperties.add(signalDeclarationMatcher.group(1));
+        }
         
         // Look for patterns like this.propertyName() which indicate the property is a signal
         Pattern signalCallPattern = Pattern.compile("\\bthis\\.(\\w+)\\(\\)");
@@ -221,13 +271,13 @@ public class AngularToSignalMigration {
             }
         }
         matcher.appendTail(sb);
-        
-        // Now handle property usage (reading, not assignment)
         result = sb.toString();
         
+        // Now handle property usage (reading, not assignment) - but NOT in getter methods
         // Convert property usage to function calls for all detected signal properties
         for (String signalProp : detectedSignalProperties) {
-            Pattern propUsagePattern = Pattern.compile("\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=|\\s*\\.set\\()");
+            // Use negative lookbehind to avoid converting inside getter definitions
+            Pattern propUsagePattern = Pattern.compile("(?<!get\\s+" + signalProp + "\\(\\)\\s*[:\\w\\s]*\\{[^}]*?)\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=|\\s*\\.set\\()");
             Matcher propMatcher = propUsagePattern.matcher(result);
             StringBuilder propSb = new StringBuilder();
             while (propMatcher.find()) {
