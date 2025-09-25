@@ -56,17 +56,14 @@ public class AngularToSignalMigration {
             needsSignalImport = true;
         }
         
-        // Pattern 2: Update property usage in method bodies BEFORE converting getters
-        result = updatePropertyUsageInMethods(result, signalProperties);
-        
-        // Pattern 3: Convert getter methods to computed signals  
+        // Pattern 2: Convert getter methods to computed signals  
         String beforeComputed = result;
         result = convertGettersToComputed(result, htmlContent);
         if (!result.equals(beforeComputed)) {
             needsComputedImport = true;
         }
         
-        // Pattern 4: Update method calls that modify properties to use signal updates
+        // Pattern 3: Update method calls that modify properties to use signal updates and handle property usage
         result = convertPropertyAssignments(result, signalProperties);
         
         // Add necessary imports at the top
@@ -127,9 +124,11 @@ public class AngularToSignalMigration {
             String value = matcher.group(5);
             
             // Check if this property should be converted to signal
-            if (isPropertyUsedInTemplate(propertyName, htmlContent) || 
-                propertiesUsedInGetters.contains(propertyName) ||
-                propertiesModifiedInEventHandlers.contains(propertyName)) {
+            boolean shouldConvert = isPropertyUsedInTemplate(propertyName, htmlContent) || 
+                                  propertiesUsedInGetters.contains(propertyName) ||
+                                  propertiesModifiedInEventHandlers.contains(propertyName);
+            
+            if (shouldConvert) {
                 signalProperties.add(propertyName); // Track this as a signal property
                 // Extract type if present
                 String signalType = "";
@@ -223,36 +222,16 @@ public class AngularToSignalMigration {
         }
         matcher.appendTail(sb);
         
-        return sb.toString();
-    }
-    
-    private static String updatePropertyUsageInMethods(String content, java.util.Set<String> signalProperties) {
-        String result = content;
+        // Now handle property usage (reading, not assignment)
+        result = sb.toString();
         
-        // Update property usage within all method bodies, not just getters
-        Pattern methodPattern = Pattern.compile("(?s)((?:get\\s+)?\\w+\\([^)]*\\)\\s*\\{)([^}]+)(\\})");
-        Matcher methodMatcher = methodPattern.matcher(result);
-        StringBuilder sb = new StringBuilder();
-        
-        while (methodMatcher.find()) {
-            String methodStart = methodMatcher.group(1);
-            String body = methodMatcher.group(2);
-            String methodEnd = methodMatcher.group(3);
-            
-            // Update signal property usage in this method body
-            String updatedBody = body;
-            for (String signalProp : signalProperties) {
-                // Convert this.signalProp to this.signalProp() - but not in assignments or when already called
-                Pattern propPattern = Pattern.compile("\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=|\\s*[.]set\\()");
-                updatedBody = propPattern.matcher(updatedBody).replaceAll("this." + signalProp + "()");
-            }
-            
-            String replacement = methodStart + updatedBody + methodEnd;
-            methodMatcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        // Convert property usage to function calls for all detected signal properties
+        for (String signalProp : detectedSignalProperties) {
+            Pattern propUsagePattern = Pattern.compile("\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=|\\s*\\.set\\()");
+            result = propUsagePattern.matcher(result).replaceAll("this." + signalProp + "()");
         }
-        methodMatcher.appendTail(sb);
         
-        return sb.toString();
+        return result;
     }
     
     private static java.util.Set<String> findPropertiesModifiedInEventHandlers(String content, String htmlContent) {

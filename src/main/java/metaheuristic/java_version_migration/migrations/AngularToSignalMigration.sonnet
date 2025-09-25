@@ -64,12 +64,15 @@ use Map<String, String> files  in metaheuristic.java_version_migration.Migration
 
 this is a continue of coding of this method and tests, so check the current implementation of method/tests and make needed refactoring
 
+you CAN modify unit tests as well if you see flaw in test
+
 -----
 when you run tests in maven, run test one-by-one. don't run all tests in AngularToSignalMigration at the same time
+
 
 -----
 tests which are failing at this moment:
 
-migrateAngularToSignalMigrationTest_eventHandlers()
+metaheuristic.java_version_migration.migrations.AngularToSignalMigrationTest#migrateAngularToSignalMigrationTest_regexReplacementWithCurlyBraces
 
 ==============================================
