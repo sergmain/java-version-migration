@@ -30,31 +30,6 @@ import java.util.regex.Pattern;
  */
 public class AngularToSignalMigration {
 
-    String sonnet = """
-        ================================================
-        DO NO MAKE ANY CHANGES IN OTHER FILES!!!
-        ==============================================
-        BEFORE STARTING, READ PROJECT'S INSTRUCTIONS CAREFULLY.
-        by project's instructions I mean instruction in Claude, not in readme.md or any other file in repo
-        -----------
-        **Problem:** I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
-       
-        =================
-        start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigration
-        and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigrationTest
-        ================
-        variable 'String content', which method migrateAngularToSignalMigration() will receive, will be always not null, no need in additional check.
-        ================
-        as i understand, for better decision, this migration method must have access to other files in dir, specifically, .html, to understand what to migrate to signal.
-        use Map<String, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing required files
-        =============
-
-        this is a continue of coding of this method and tests, so check the current implementation of method/tests and make needed adjustments
-        =============
-        
-        also, there are 2 files (.ts and .html) which i want to migrate to signal by using this method, but right now nothing was changed when I run migrateAngularToSignalMigrationTest()
-        """;
-
     public static Content process(Migration.MigrationConfig cfg, Globals globals, String content) {
         String newContent = migrateAngularToSignalMigration(cfg, content);
         Content result = new Content(newContent, !newContent.equals(content));
@@ -235,24 +210,45 @@ public class AngularToSignalMigration {
         
         if (matcher.find()) {
             // Angular core import exists, add signal/computed to it
-            String existingImports = matcher.group(1).trim();
-            StringBuilder newImports = new StringBuilder(existingImports);
+            String fullMatch = matcher.group(0);
+            String existingImports = matcher.group(1);
+            
+            // Parse existing imports to preserve formatting
+            String[] imports = existingImports.split(",");
+            boolean hasSpaces = existingImports.contains(" ");
+            String separator = hasSpaces ? ", " : ", ";
+            
+            StringBuilder newImports = new StringBuilder();
+            for (String imp : imports) {
+                if (newImports.length() > 0) {
+                    newImports.append(separator);
+                }
+                newImports.append(imp.trim());
+            }
             
             if (needsSignal && !existingImports.contains("signal")) {
-                if (!existingImports.isEmpty() && !existingImports.endsWith(",")) {
-                    newImports.append(", ");
+                if (newImports.length() > 0) {
+                    newImports.append(separator);
                 }
                 newImports.append("signal");
             }
             
             if (needsComputed && !existingImports.contains("computed")) {
-                if (!newImports.toString().isEmpty() && !newImports.toString().endsWith(",")) {
-                    newImports.append(", ");
+                if (newImports.length() > 0) {
+                    newImports.append(separator);
                 }
                 newImports.append("computed");
             }
             
-            return content.replace(matcher.group(1), newImports.toString());
+            // Preserve the original spacing style
+            String replacement;
+            if (hasSpaces) {
+                replacement = fullMatch.replace(existingImports, " " + newImports + " ");
+            } else {
+                replacement = fullMatch.replace(existingImports, newImports.toString());
+            }
+            
+            return content.replace(fullMatch, replacement);
         } else {
             // No @angular/core import, add it at the top
             StringBuilder imports = new StringBuilder("import { ");

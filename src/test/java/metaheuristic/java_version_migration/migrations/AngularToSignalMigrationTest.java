@@ -248,6 +248,260 @@ class AngularToSignalMigrationTest {
         assertEquals(tsContent, result);
     }
     
+    @Test
+    public void migrateAngularToSignalMigrationTest_realWorldAngularComponent() {
+        String htmlContent = """
+            <div class="container">
+                <h1>{{ title }}</h1>
+                <div *ngIf="isLoading">Loading...</div>
+                <ul *ngFor="let item of filteredItems">
+                    <li>{{ item.name }} - {{ item.price | currency }}</li>
+                </ul>
+                <button (click)="addItem()" [disabled]="isLoading">Add Item</button>
+                <input [(ngModel)]="searchTerm" placeholder="Search...">
+            </div>
+            """;
+        
+        String tsContent = """
+            import { Component, OnInit } from '@angular/core';
+            
+            export class ProductListComponent implements OnInit {
+                public title: string = 'Product List';
+                private items: Product[] = [];
+                protected isLoading: boolean = false;
+                public searchTerm: string = '';
+                
+                get filteredItems() { 
+                    return this.items.filter(item => 
+                        item.name.toLowerCase().includes(this.searchTerm.toLowerCase())
+                    );
+                }
+                
+                ngOnInit() {
+                    this.loadItems();
+                }
+                
+                addItem() {
+                    this.items = [...this.items, new Product()];
+                    this.isLoading = true;
+                }
+                
+                private loadItems() {
+                    this.isLoading = true;
+                }
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("product-list.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            import { Component, OnInit, signal, computed } from '@angular/core';
+            
+            export class ProductListComponent implements OnInit {
+                public title = signal<string>('Product List');
+                private items = signal<Product[]>([]);
+                protected isLoading = signal<boolean>(false);
+                public searchTerm = signal<string>('');
+                
+                filteredItems = computed(() => { 
+                    return this.items().filter(item => 
+                        item.name.toLowerCase().includes(this.searchTerm().toLowerCase())
+                    );
+                });
+                
+                ngOnInit() {
+                    this.loadItems();
+                }
+                
+                addItem() {
+                    this.items.set([...this.items(), new Product()]);
+                    this.isLoading.set(true);
+                }
+                
+                private loadItems() {
+                    this.isLoading.set(true);
+                }
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+    
+    @Test
+    public void migrateAngularToSignalMigrationTest_propertyBinding() {
+        String htmlContent = """
+            <input [value]="username" [disabled]="isDisabled">
+            <div [class.active]="isActive">Content</div>
+            """;
+        
+        String tsContent = """
+            export class TestComponent {
+                public username: string = '';
+                private isDisabled: boolean = false; 
+                protected isActive: boolean = true;
+                private unused: string = 'not used';
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            import { signal } from '@angular/core';
+            export class TestComponent {
+                public username = signal<string>('');
+                private isDisabled = signal<boolean>(false); 
+                protected isActive = signal<boolean>(true);
+                private unused: string = 'not used';
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+    
+    @Test
+    public void migrateAngularToSignalMigrationTest_eventHandlers() {
+        String htmlContent = """
+            <button (click)="onClick()" (mouseover)="onHover()">Click me</button>
+            <input (change)="onDataChange($event)">
+            """;
+        
+        String tsContent = """
+            export class TestComponent {
+                private data: any = null;
+                private hoverState: boolean = false;
+                
+                onClick() {
+                    this.data = { clicked: true };
+                }
+                
+                onHover() {
+                    this.hoverState = true;
+                }
+                
+                onDataChange(event: any) {
+                    this.data = event.target.value;
+                }
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            import { signal } from '@angular/core';
+            export class TestComponent {
+                private data = signal<any>(null);
+                private hoverState = signal<boolean>(false);
+                
+                onClick() {
+                    this.data.set({ clicked: true });
+                }
+                
+                onHover() {
+                    this.hoverState.set(true);
+                }
+                
+                onDataChange(event: any) {
+                    this.data.set(event.target.value);
+                }
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+    
+    @Test
+    public void migrateAngularToSignalMigrationTest_mixedSignalAndNonSignal() {
+        String htmlContent = """
+            <div>{{ publicData }}</div>
+            """;
+        
+        String tsContent = """
+            import { Injectable } from '@angular/core';
+            
+            export class TestComponent {
+                public publicData: string = 'visible';
+                private privateData: string = 'hidden';
+                
+                @Injectable() 
+                service: any;
+                
+                constructor(private http: HttpClient) {}
+                
+                updateData() {
+                    this.privateData = 'updated';
+                    this.publicData = 'new value';
+                }
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            import { Injectable, signal } from '@angular/core';
+            
+            export class TestComponent {
+                public publicData = signal<string>('visible');
+                private privateData: string = 'hidden';
+                
+                @Injectable() 
+                service: any;
+                
+                constructor(private http: HttpClient) {}
+                
+                updateData() {
+                    this.privateData = 'updated';
+                    this.publicData.set('new value');
+                }
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+    
+    @Test
+    public void migrateAngularToSignalMigrationTest_complexTypes() {
+        String htmlContent = """
+            <div>{{ userProfile.name }}</div>
+            <div *ngFor="let item of itemList">{{ item }}</div>
+            """;
+        
+        String tsContent = """
+            export interface UserProfile {
+                name: string;
+                email: string;
+            }
+            
+            export class TestComponent {
+                public userProfile: UserProfile = { name: 'John', email: 'john@example.com' };
+                private itemList: string[] = ['item1', 'item2'];
+                protected complexData: Map<string, any> = new Map();
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            import { signal } from '@angular/core';
+            export interface UserProfile {
+                name: string;
+                email: string;
+            }
+            
+            export class TestComponent {
+                public userProfile = signal<UserProfile>({ name: 'John', email: 'john@example.com' });
+                private itemList = signal<string[]>(['item1', 'item2']);
+                protected complexData: Map<string, any> = new Map();
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+    
     private Migration.MigrationConfig createConfig(String fileName, String tsContent, String htmlContent) {
         Path tsPath = Paths.get(fileName);
         String baseName = tsPath.getFileName().toString().substring(0, fileName.length() - 3);

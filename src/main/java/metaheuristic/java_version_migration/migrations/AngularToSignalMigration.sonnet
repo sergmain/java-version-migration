@@ -1,0 +1,35 @@
+================================================
+DO NO MAKE ANY CHANGES IN OTHER FILES!!!
+==============================================
+BEFORE STARTING, READ PROJECT'S INSTRUCTIONS CAREFULLY.
+by project's instructions I mean instruction in Claude, not in readme.md or any other file in repo
+-----------
+do your job in small steps, after each step make pause and wait for my 'go'
+-----------
+**Problem:** I need to create static method witch will migrate content of .ts files in my angular ver 20 application to usage of signals
+
+=================
+start to implement a method metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigration
+and creating unit-tests in metaheuristic.java_version_migration.migrations.AngularToSignalMigration.migrateAngularToSignalMigrationTest
+================
+variable 'String content', which method migrateAngularToSignalMigration() will receive, will be always not null, no need in additional check.
+================
+as i understand, for better decision, this migration method must have access to other files in dir, specifically, .html, to understand what to migrate to signal.
+use Map<String, String> files  in metaheuristic.java_version_migration.Migration.MigrationConfig for accessing required files
+=============
+
+this is a continue of coding of this method and tests, so check the current implementation of method/tests and make needed adjustments
+=============
+
+also, there are 2 files (.ts and .html) which i want to migrate to signal by using this method, but right now nothing was changed when I run migrateAngularToSignalMigrationTest()
+
+============
+when you run tests in maven, run test one-by-one. don't run all tests in AngularToSignalMigration at the same time
+
+
+tests which are failing at this moment:
+
+migrateAngularToSignalMigrationTest_mixedSignalAndNonSignal()
+migrateAngularToSignalMigrationTest_realWorldAngularComponent()
+migrateAngularToSignalMigrationTest_propertyBinding()
+migrateAngularToSignalMigrationTest_eventHandlers()
