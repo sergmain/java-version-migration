@@ -139,7 +139,7 @@ public class AngularToSignalMigration {
                 String replacement = indent + visibility + propertyName + " = signal" + signalType + "(" + value + ");";
                 matcher.appendReplacement(sb, replacement);
             } else {
-                matcher.appendReplacement(sb, matcher.group(0)); // No change
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0))); // No change
             }
         }
         matcher.appendTail(sb);
@@ -181,7 +181,7 @@ public class AngularToSignalMigration {
                     matcher.appendReplacement(sb, replacement);
                 }
             } else {
-                matcher.appendReplacement(sb, matcher.group(0)); // No change
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0))); // No change
             }
         }
         matcher.appendTail(sb);
@@ -217,7 +217,7 @@ public class AngularToSignalMigration {
                 String replacement = "this." + propertyName + ".set(" + value + ");";
                 matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
             } else {
-                matcher.appendReplacement(sb, matcher.group(0)); // No change
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0))); // No change
             }
         }
         matcher.appendTail(sb);

@@ -542,6 +542,61 @@ class AngularToSignalMigrationTest {
     }
     
     @Test
+    public void migrateAngularToSignalMigrationTest_realWorldEscapeSequences() {
+        String htmlContent = """
+            <div>{{ expert10x10number }}</div>
+            <button (click)="createExpertTemplate()">Create Expert</button>
+            """;
+        
+        String tsContent = """
+            const EXPERT_10_X_10 : string =
+            `-1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+            -1  0  0  9  0  5  0  0  1  0`;
+            
+            export class KakuroDesignComponent {
+                expert10x10number : number[][];
+                
+                constructor() {
+                    this.expert10x10number = EXPERT_10_X_10
+                        .split('\\n')
+                        .map(row => row.trim().split(/\\s+/).map(Number));
+                }
+                
+                createExpertTemplate(event?: Event) {
+                    const matrix: number[][] = this.expert10x10number;
+                    this.expert10x10number = matrix.map(row => [...row]);
+                }
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("kakuro-design.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            const EXPERT_10_X_10 : string =
+            `-1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+            -1  0  0  9  0  5  0  0  1  0`;
+            
+            export class KakuroDesignComponent {
+                expert10x10number : number[][];
+                
+                constructor() {
+                    this.expert10x10number = EXPERT_10_X_10
+                        .split('\\n')
+                        .map(row => row.trim().split(/\\s+/).map(Number));
+                }
+                
+                createExpertTemplate(event?: Event) {
+                    const matrix: number[][] = this.expert10x10number;
+                    this.expert10x10number = matrix.map(row => [...row]);
+                }
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+
+    @Test
     public void migrateAngularToSignalMigrationTest_escapeSequences() {
         String htmlContent = """
             <div>{{ expert10x10number }}</div>
