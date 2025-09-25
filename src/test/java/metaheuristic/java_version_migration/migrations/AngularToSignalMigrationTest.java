@@ -541,6 +541,43 @@ class AngularToSignalMigrationTest {
         assertEquals(expected, result);
     }
     
+    @Test
+    public void migrateAngularToSignalMigrationTest_escapeSequences() {
+        String htmlContent = """
+            <div>{{ expert10x10number }}</div>
+            """;
+        
+        String tsContent = """
+            export class TestComponent {
+                private expert10x10number: number[][] = [];
+                
+                loadData() {
+                    this.expert10x10number = EXPERT_10_X_10
+                        .split('\\n')
+                        .map(row => row.trim().split(/\\s+/).map(Number));
+                }
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            import { signal } from '@angular/core';
+            export class TestComponent {
+                private expert10x10number = signal<number[][]>([]);
+                
+                loadData() {
+                    this.expert10x10number.set(EXPERT_10_X_10
+                        .split('\\n')
+                        .map(row => row.trim().split(/\\s+/).map(Number)));
+                }
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+
     private Migration.MigrationConfig createConfig(String fileName, String tsContent, String htmlContent) {
         Path tsPath = Paths.get(fileName);
         String baseName = tsPath.getFileName().toString().substring(0, fileName.length() - 3);

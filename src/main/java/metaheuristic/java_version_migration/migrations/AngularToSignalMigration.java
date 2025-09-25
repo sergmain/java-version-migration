@@ -215,7 +215,7 @@ public class AngularToSignalMigration {
             // Check if this property was converted to a signal or detected as signal usage
             if (detectedSignalProperties.contains(propertyName)) {
                 String replacement = "this." + propertyName + ".set(" + value + ");";
-                matcher.appendReplacement(sb, replacement);
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
             } else {
                 matcher.appendReplacement(sb, matcher.group(0)); // No change
             }
@@ -228,7 +228,13 @@ public class AngularToSignalMigration {
         // Convert property usage to function calls for all detected signal properties
         for (String signalProp : detectedSignalProperties) {
             Pattern propUsagePattern = Pattern.compile("\\bthis\\." + signalProp + "\\b(?!\\(\\)|\\s*=|\\s*\\.set\\()");
-            result = propUsagePattern.matcher(result).replaceAll("this." + signalProp + "()");
+            Matcher propMatcher = propUsagePattern.matcher(result);
+            StringBuilder propSb = new StringBuilder();
+            while (propMatcher.find()) {
+                propMatcher.appendReplacement(propSb, Matcher.quoteReplacement("this." + signalProp + "()"));
+            }
+            propMatcher.appendTail(propSb);
+            result = propSb.toString();
         }
         
         return result;
