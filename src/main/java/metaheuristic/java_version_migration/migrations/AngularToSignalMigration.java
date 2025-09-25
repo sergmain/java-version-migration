@@ -248,7 +248,7 @@ public class AngularToSignalMigration {
             }
             
             String replacement = methodStart + updatedBody + methodEnd;
-            methodMatcher.appendReplacement(sb, replacement);
+            methodMatcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
         }
         methodMatcher.appendTail(sb);
         

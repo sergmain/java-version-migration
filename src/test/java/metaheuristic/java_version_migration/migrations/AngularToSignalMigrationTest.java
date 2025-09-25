@@ -37,6 +37,41 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 class AngularToSignalMigrationTest {
 
     @Test
+    public void migrateAngularToSignalMigrationTest_regexReplacementWithCurlyBraces() {
+        String htmlContent = """
+            <button (click)="updateData()">Update</button>
+            """;
+        
+        String tsContent = """
+            export class TestComponent {
+                private data: any = null;
+                
+                updateData() {
+                    this.data = { clicked: true, timestamp: new Date() };
+                    const obj = { key: 'value', nested: { inner: this.data } };
+                }
+            }
+            """;
+        
+        Migration.MigrationConfig cfg = createConfig("test.component.ts", tsContent, htmlContent);
+        String result = AngularToSignalMigration.migrateAngularToSignalMigration(cfg, tsContent);
+        
+        String expected = """
+            import { signal } from '@angular/core';
+            export class TestComponent {
+                private data = signal<any>(null);
+                
+                updateData() {
+                    this.data.set({ clicked: true, timestamp: new Date() });
+                    const obj = { key: 'value', nested: { inner: this.data() } };
+                }
+            }
+            """;
+        
+        assertEquals(expected, result);
+    }
+    
+    @Test
     public void migrateAngularToSignalMigrationTest_simpleProperty() {
         String htmlContent = """
             <div>{{ items }}</div>
@@ -61,6 +96,7 @@ class AngularToSignalMigrationTest {
         assertEquals(expected, result);
     }
     
+
     @Test
     public void migrateAngularToSignalMigrationTest_propertyNotUsedInTemplate() {
         String htmlContent = """
@@ -80,6 +116,7 @@ class AngularToSignalMigrationTest {
         assertEquals(tsContent, result);
     }
     
+
     @Test
     public void migrateAngularToSignalMigrationTest_getterToComputed() {
         String htmlContent = """
@@ -106,7 +143,7 @@ class AngularToSignalMigrationTest {
         
         assertEquals(expected, result);
     }
-    
+
     @Test
     public void migrateAngularToSignalMigrationTest_propertyAssignment() {
         String tsContent = """
@@ -132,7 +169,7 @@ class AngularToSignalMigrationTest {
         
         assertEquals(expected, result);
     }
-    
+
     @Test
     public void migrateAngularToSignalMigrationTest_existingAngularImport() {
         String htmlContent = """
@@ -234,7 +271,7 @@ class AngularToSignalMigrationTest {
         
         assertEquals("", result);
     }
-    
+
     @Test
     public void migrateAngularToSignalMigrationTest_noHtmlFile() {
         String tsContent = """
@@ -413,7 +450,7 @@ class AngularToSignalMigrationTest {
         
         assertEquals(expected, result);
     }
-    
+
     @Test
     public void migrateAngularToSignalMigrationTest_mixedSignalAndNonSignal() {
         String htmlContent = """
