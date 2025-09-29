@@ -390,7 +390,8 @@ class AngularToSignalMigration:
         # Pattern: this.propertyName = value; -> this.propertyName.set(value);
         # Also handle: this.propertyName() = value; (incorrect after conversion) -> this.propertyName.set(value);
         # Only convert if the property was converted to a signal or detected as signal usage
-        assignment_pattern = re.compile(r"(?m)this\.(\w+)(\(\))?\s*=\s*([^;]+);")
+        # IMPORTANT: Use single = for assignment, not ==, ===, !=, !==
+        assignment_pattern = re.compile(r"(?m)this\.(\w+)(\(\))?\s*=\s*([^=][^;]*);")
         
         def replace_assignment(match):
             property_name = match.group(1)
