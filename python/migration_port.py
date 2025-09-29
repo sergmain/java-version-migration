@@ -245,9 +245,18 @@ class Migration:
         # The AngularToSignalMigration.process expects (config, content) not (config, globals, content)
         return AngularToSignalMigration.process(config, content)
     
+    @staticmethod
+    def angular_html_signal_migration(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
+        """Angular HTML template signal migration implementation."""
+        from angular_html_signal_migration import AngularHtmlSignalMigration
+        return AngularHtmlSignalMigration.process(config, content)
+    
     # Define migration functions by version
     functions: List[MigrationFunctions] = [
-        MigrationFunctions(21, [angular_to_signal_migration])
+        MigrationFunctions(21, [
+            # angular_to_signal_migration,
+            angular_html_signal_migration
+        ])
     ]
     
     # Sort by version
