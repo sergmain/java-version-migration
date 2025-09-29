@@ -36,23 +36,33 @@ class AngularHtmlSignalMigration:
         # Get the corresponding TypeScript file to analyze what properties are signals
         ts_content = AngularHtmlSignalMigration._get_ts_content(cfg)
         if not ts_content:
+            print(f"DEBUG: No TypeScript content found for {cfg.path.name}")
             return html_content
+        
+        print(f"DEBUG: Found TypeScript content for {cfg.path.name}, length: {len(ts_content)}")
         
         # Detect signal properties from the TypeScript file
         signal_properties = AngularHtmlSignalMigration._detect_signal_properties(ts_content)
         computed_properties = AngularHtmlSignalMigration._detect_computed_properties(ts_content)
         
+        print(f"DEBUG: Detected signals: {signal_properties}")
+        print(f"DEBUG: Detected computed: {computed_properties}")
+        
         # Combine all signal-based properties
         all_signal_properties = signal_properties | computed_properties
         
         if not all_signal_properties:
+            print(f"DEBUG: No signal properties detected for {cfg.path.name}")
             return html_content
         
         result = html_content
         
         # Update HTML to add () after signal properties
         for signal_prop in all_signal_properties:
+            before = result
             result = AngularHtmlSignalMigration._add_signal_calls_to_property(result, signal_prop)
+            if result != before:
+                print(f"DEBUG: Updated property '{signal_prop}' in {cfg.path.name}")
         
         return result
     
@@ -115,6 +125,7 @@ class AngularHtmlSignalMigration:
         
         lines = result.split('\n')
         new_lines = []
+        changes_made = 0
         
         for line in lines:
             modified_line = line
@@ -136,11 +147,19 @@ class AngularHtmlSignalMigration:
                     continue
                 
                 # Check context to determine if we should add ()
-                if AngularHtmlSignalMigration._should_add_parentheses(modified_line, start, end, property_name):
+                should_add = AngularHtmlSignalMigration._should_add_parentheses(modified_line, start, end, property_name)
+                
+                if should_add:
                     # Insert () after the property
                     modified_line = modified_line[:end] + '()' + modified_line[end:]
+                    changes_made += 1
             
             new_lines.append(modified_line)
+        
+        if changes_made > 0:
+            print(f"DEBUG: Made {changes_made} changes for property '{property_name}'")
+        else:
+            print(f"DEBUG: No changes made for property '{property_name}' (found {len(list(re.finditer(rf'\b{property_name}\b', html_content)))} occurrences)")
         
         return '\n'.join(new_lines)
     
@@ -152,10 +171,12 @@ class AngularHtmlSignalMigration:
         """
         # Check if inside a string (single or double quotes)
         if AngularHtmlSignalMigration._is_inside_string(line, start):
+            print(f"DEBUG: Skipping '{property_name}' - inside string")
             return False
         
         # Check if inside a comment
         if AngularHtmlSignalMigration._is_inside_comment(line, start):
+            print(f"DEBUG: Skipping '{property_name}' - inside comment")
             return False
         
         # Check what comes after the property
@@ -163,10 +184,14 @@ class AngularHtmlSignalMigration:
         
         # Skip if followed by ( - already a method call
         if after.startswith('('):
+            print(f"DEBUG: Skipping '{property_name}' - already has ()")
             return False
         
         # Skip if followed by = - it's an assignment (shouldn't happen in templates but just in case)
-        if after.lstrip().startswith('=') and not after.lstrip().startswith('=='):
+        # BUT allow == and === for comparisons
+        after_stripped = after.lstrip()
+        if after_stripped.startswith('=') and not after_stripped.startswith('==') and not after_stripped.startswith('==='):
+            print(f"DEBUG: Skipping '{property_name}' - followed by =")
             return False
         
         # Check what comes before the property
@@ -174,23 +199,57 @@ class AngularHtmlSignalMigration:
         
         # Skip if preceded by @ - it's a decorator or special syntax
         if before.rstrip().endswith('@'):
+            print(f"DEBUG: Skipping '{property_name}' - preceded by @")
             return False
         
         # Skip if preceded by # - it's a template reference variable
         if before.rstrip().endswith('#'):
+            print(f"DEBUG: Skipping '{property_name}' - preceded by #")
+            return False
+        
+        # Skip if preceded by . - it's a property access (like obj.propertyName)
+        if before.rstrip().endswith('.'):
+            print(f"DEBUG: Skipping '{property_name}' - preceded by .")
             return False
         
         # Skip if it's part of a property path like @Input() or similar
         if '@' in before and 'Input' in line[max(0, start-20):end]:
+            print(f"DEBUG: Skipping '{property_name}' - looks like @Input")
             return False
         
         # Add () in all other cases
+        print(f"DEBUG: Adding () to '{property_name}'")
         return True
     
     @staticmethod
     def _is_inside_string(line: str, pos: int) -> bool:
-        """Check if position is inside a string literal."""
-        # Count quotes before position
+        """
+        Check if position is inside a string literal that's NOT an Angular binding.
+        In Angular templates, things like [attr]="expression" should NOT be considered
+        as being inside a string - the expression part needs signal () added.
+        """
+        # Don't treat Angular attribute bindings as strings
+        # Patterns like: [property]="expression", (event)="expression", [(ngModel)]="expression"
+        # Look backwards to see if we're inside an Angular binding
+        before = line[:pos]
+        
+        # Check if we're inside [...="  or (..."  or [(...]=" 
+        angular_binding_start = max(
+            before.rfind('="'),
+            before.rfind("='")
+        )
+        
+        if angular_binding_start != -1:
+            # Check if there's a [ or ( before the ="
+            check_section = before[:angular_binding_start]
+            if check_section.rfind('[') > check_section.rfind(']'):
+                # We're inside [...]="..."
+                return False
+            if check_section.rfind('(') > check_section.rfind(')'):
+                # We're inside (...)="..."
+                return False
+        
+        # For regular strings (not Angular bindings), count quotes
         single_quotes = 0
         double_quotes = 0
         
@@ -200,7 +259,7 @@ class AngularHtmlSignalMigration:
             elif line[i] == '"' and (i == 0 or line[i-1] != '\\'):
                 double_quotes += 1
         
-        # If odd number of quotes, we're inside a string
+        # If odd number of quotes, we're inside a regular string
         return (single_quotes % 2 == 1) or (double_quotes % 2 == 1)
     
     @staticmethod

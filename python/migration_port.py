@@ -88,7 +88,7 @@ class Globals:
             
             # Process metas - convert list of dicts with single key-value to list of dicts
             metas = []
-            if 'metas' in migration_config:
+            if migration_config.get('metas'):
                 for meta_item in migration_config['metas']:
                     if isinstance(meta_item, dict):
                         metas.append(meta_item)
@@ -364,31 +364,27 @@ class MetaheuristicMigrationApplication:
     """Main application class."""
     
     def __init__(self, globals_config: Optional[Globals] = None, config_path: Optional[str] = None):
-        if globals_config is None:
-            if config_path:
-                self.globals = Globals.from_yaml(config_path)
-            else:
-                # Try to find config file
-                config_candidates = [
-                    "config/application.yml",
-                    "application.yml", 
-                    "../config/application.yml"
-                ]
-                
-                config_found = None
-                for candidate in config_candidates:
-                    if Path(candidate).exists():
-                        self.globals = Globals.from_yaml(candidate)
-                        config_found = candidate
-                        logger.info(f"Using config from {candidate}")
-                        break
-                
-                if not config_found:
-                    raise FileNotFoundError(
-                        "No configuration file found. Searched: " + ", ".join(config_candidates)
-                    )
-        else:
-            self.globals = globals_config
+        print(f"Curr dir: {os.getcwd()}")
+
+        # Try to find config file
+        config_candidates = [
+            "config/application.yml",
+            "application.yml",
+            "../config/application.yml"
+        ]
+
+        config_found = None
+        for candidate in config_candidates:
+            if Path(candidate).exists():
+                logger.info(f"Using config from {candidate}")
+                self.globals = Globals.from_yaml(candidate)
+                config_found = candidate
+                break
+
+        if not config_found:
+            raise FileNotFoundError(
+                "No configuration file found. Searched: " + ", ".join(config_candidates)
+            )
             
         self.config = Config(self.globals)
     
