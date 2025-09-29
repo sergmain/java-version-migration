@@ -173,8 +173,8 @@ public class AngularToSignalMigration {
         String result = content;
         
         // Pattern: get propertyName(): ReturnType { body } -> propertyName = computed(() => { body });
-        // Make the return type optional to handle cases without explicit return types
-        Pattern pattern = Pattern.compile("(?s)(\\s*)get\\s+(\\w+)\\(\\)(?:\\s*:\\s*([^\\{]*?))?\\s*\\{([^}]+)\\}");
+        // Use a more robust pattern to capture the complete getter body including nested braces
+        Pattern pattern = Pattern.compile("(?s)(\\s*)get\\s+(\\w+)\\(\\)(?:\\s*:\\s*([^\\{]*?))?\\s*\\{((?:[^{}]*|\\{[^}]*\\})*?)\\}");
         Matcher matcher = pattern.matcher(result);
         StringBuilder sb = new StringBuilder();
         
@@ -201,33 +201,20 @@ public class AngularToSignalMigration {
     private static String transformPropertyReferencesInGetterBody(String body) {
         String result = body;
         
-        // DEBUG: Print the body to see what we're working with
-        System.out.println("Transforming body: " + body);
+        // Apply transformations sequentially with precise order control
         
-        // Step by step transformations
-        
-        // 1. Transform this.activeField -> this.activeField() 
-        result = result.replaceAll("\\bthis\\.activeField\\b(?!\\()", "this.activeField()");
-        
-        // 2. Transform this.currentRow -> this.currentRow()
-        result = result.replaceAll("\\bthis\\.currentRow\\b(?!\\()", "this.currentRow()");
-        
-        // 3. Transform this.kakuro.cells -> this.kakuro()?.cells
+        // 1. First, handle property transformations WITHOUT side effects
+        result = result.replaceAll("\\bthis\\.activeField(?!\\()", "this.activeField()");
+        result = result.replaceAll("\\bthis\\.currentRow(?!\\()", "this.currentRow()");
         result = result.replaceAll("\\bthis\\.kakuro\\.cells\\b", "this.kakuro()?.cells");
+        result = result.replaceAll("\\]\\.indexOf", "]?.indexOf");
         
-        // 4. Transform array access to use optional chaining  
-        result = result.replaceAll("\\bcells\\[([^\\]]+)\\]\\.indexOf", "cells[$1]?.indexOf");
+        // 2. Apply ?? -1 with very specific string matching to avoid duplicate application
+        result = result.replaceAll("findIndex\\(row => row\\.indexOf\\(this\\.activeField\\(\\)\\) !== -1\\)(?!\\s*\\?\\?)", 
+                                 "findIndex(row => row.indexOf(this.activeField()) !== -1) ?? -1");
         
-        // 5. Add ?? -1 to findIndex
-        if (result.contains("findIndex")) {
-            result = result.replaceAll("(findIndex\\([^)]+\\))(?!\\s*\\?\\?)", "$1 ?? -1");
-        }
-        
-        // 6. Add ?? -1 to indexOf at end of statements  
-        result = result.replaceAll("(indexOf\\([^)]+\\));", "$1 ?? -1;");
-        
-        // DEBUG: Print result
-        System.out.println("Transformed to: " + result);
+        // 3. Fix only return statement indexOf - use exact pattern match
+        result = result.replaceAll("indexOf\\(this\\.activeField\\(\\)\\);$", "indexOf(this.activeField()) ?? -1;");
         
         return result;
     }

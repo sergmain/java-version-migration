@@ -19,7 +19,7 @@ package metaheuristic.java_version_migration.migrations;
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.Globals;
 import metaheuristic.java_version_migration.Migration;
-import metaheuristic.java_version_migration.MigrationUtils;
+import metaheuristic.java_version_migration.utils.MigrationUtils;
 import metaheuristic.java_version_migration.data.Content;
 import metaheuristic.java_version_migration.utils.MetaUtils;
 
@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static metaheuristic.java_version_migration.MigrationUtils.isInComment;
+import static metaheuristic.java_version_migration.utils.MigrationUtils.isInComment;
 
 /**
  * @author Sergio Lissner

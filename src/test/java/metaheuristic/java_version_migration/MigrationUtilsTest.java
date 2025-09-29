@@ -21,7 +21,7 @@ import org.junit.jupiter.api.parallel.Execution;
 
 import java.util.List;
 
-import static metaheuristic.java_version_migration.MigrationUtils.*;
+import static metaheuristic.java_version_migration.utils.MigrationUtils.*;
 import static metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21.*;
 import static metaheuristic.java_version_migration.migrations.MigrateSynchronizedJava21.positions;
 import static org.junit.jupiter.api.Assertions.*;

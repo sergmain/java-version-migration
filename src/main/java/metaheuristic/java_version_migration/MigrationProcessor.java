@@ -19,6 +19,7 @@ package metaheuristic.java_version_migration;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import metaheuristic.java_version_migration.data.Content;
+import metaheuristic.java_version_migration.utils.MigrationUtils;
 import org.apache.commons.io.file.PathUtils;
 import org.apache.commons.io.filefilter.FileFileFilter;
 import org.apache.commons.io.filefilter.IOFileFilter;
@@ -35,11 +36,10 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static metaheuristic.java_version_migration.MigrationUtils.execStat;
+import static metaheuristic.java_version_migration.utils.MigrationUtils.execStat;
 
 /**
  * @author Sergio Lissner
