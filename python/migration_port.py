@@ -238,12 +238,12 @@ class MigrationUtils:
 class Migration:
     """Migration processing logic."""
     
-    # Placeholder migration functions - implement as needed
     @staticmethod
     def angular_to_signal_migration(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
-        """Placeholder for AngularToSignalMigration::process."""
-        # Implement actual migration logic here
-        return Content(content, False)
+        """Angular to Signal migration implementation."""
+        from angular_to_signal_migration import AngularToSignalMigration
+        # The AngularToSignalMigration.process expects (config, content) not (config, globals, content)
+        return AngularToSignalMigration.process(config, content)
     
     # Define migration functions by version
     functions: List[MigrationFunctions] = [
@@ -265,18 +265,33 @@ class MigrationProcessor:
         """Main migration processing function."""
         start_time = time.time() * 1000
         task_count = 0
+        files_found = []
+        
+        # First, collect all files to process
+        for starting_path in globals_config.starting_path:
+            if not starting_path.exists():
+                logger.warning(f"Starting path does not exist: {starting_path}")
+                continue
+                
+            if not starting_path.is_dir():
+                logger.warning(f"Starting path is not a directory: {starting_path}")
+                continue
+            
+            logger.info(f"Scanning directory: {starting_path}")
+            # Walk through directory and find matching files
+            for file_path in starting_path.rglob(f"*{globals_config.file_mask}"):
+                if MigrationProcessor._filter_path(file_path, globals_config.exclude_path):
+                    files_found.append(file_path)
+        
+        logger.info(f"Found {len(files_found)} files to process")
         
         with ThreadPoolExecutor(max_workers=globals_config.threads) as executor:
             futures = []
             
-            for starting_path in globals_config.starting_path:
-                if starting_path.exists() and starting_path.is_dir():
-                    # Walk through directory and find matching files
-                    for file_path in starting_path.rglob(f"*{globals_config.file_mask}"):
-                        if MigrationProcessor._filter_path(file_path, globals_config.exclude_path):
-                            future = executor.submit(MigrationProcessor._process, file_path, globals_config)
-                            futures.append(future)
-                            task_count += 1
+            for file_path in files_found:
+                future = executor.submit(MigrationProcessor._process, file_path, globals_config)
+                futures.append(future)
+                task_count += 1
             
             # Wait for all tasks to complete
             for future in as_completed(futures):
@@ -327,9 +342,14 @@ class MigrationProcessor:
         
         try:
             for file_path in directory.iterdir():
-                if file_path.is_file() and file_path.name.endswith(globals_config.file_mask):
+                if file_path.is_file():
+                    # Read ALL text files in the directory, not just files matching the mask
+                    # This is important to get .html files when processing .ts files
                     try:
                         files[file_path.name] = file_path.read_text(encoding='utf-8')
+                    except UnicodeDecodeError:
+                        # Skip binary files
+                        pass
                     except Exception as e:
                         logger.warning(f"Could not read file {file_path}: {e}")
         except Exception as e:

@@ -31,7 +31,12 @@ class AngularToSignalMigration:
         result = content
         needs_signal_import = False
         needs_computed_import = False
+        needs_input_import = False
         signal_properties = set()
+        
+        # Check if there are @Input() decorators
+        if "@Input()" in result:
+            needs_input_import = True
         
         # Get corresponding HTML file content for analysis
         html_content = AngularToSignalMigration._get_html_content(cfg)
@@ -52,7 +57,7 @@ class AngularToSignalMigration:
         result = AngularToSignalMigration._convert_property_assignments(result, signal_properties)
         
         # Add necessary imports at the top
-        result = AngularToSignalMigration._add_signal_imports(result, needs_signal_import, needs_computed_import)
+        result = AngularToSignalMigration._add_signal_imports(result, needs_signal_import, needs_computed_import, needs_input_import)
         
         return result
     
@@ -69,6 +74,12 @@ class AngularToSignalMigration:
     @staticmethod
     def _convert_properties_to_signals(content: str, html_content: str, signal_properties: Set[str]) -> str:
         result = content
+        
+        # Find all @Input() decorated properties - these MUST be converted to input()
+        input_properties = set()
+        input_pattern = re.compile(r"@Input\(\)\s+(\w+)")
+        for match in input_pattern.finditer(content):
+            input_properties.add(match.group(1))
         
         # First, find all getters used in the template
         getter_pattern = re.compile(r"(?s)get\s+(\w+)\(\)\s*\{([^}]+)\}")
@@ -91,7 +102,30 @@ class AngularToSignalMigration:
         
         # Process property declarations in correct order to avoid conflicts
         
-        # First handle typed properties with initializers: property: Type = value;
+        # First handle @Input() decorated properties - convert to input()
+        input_with_type_pattern = re.compile(r"(?m)^(\s*)@Input\(\)\s+((?:private|public|protected)\s+)?(\w+)(\??)\s*:\s*([^=;\n]+)(?:\s*=\s*([^;\n]+))?;")
+        
+        def replace_input(match):
+            indent = match.group(1)
+            visibility = match.group(2) if match.group(2) else ""
+            property_name = match.group(3)
+            optional = match.group(4)
+            type_annotation = match.group(5).strip()
+            default_value = match.group(6)
+            
+            signal_properties.add(property_name)
+            
+            # Convert @Input() to input()
+            if default_value:
+                return f"{indent}{visibility}{property_name} = input<{type_annotation}>({default_value.strip()});"
+            elif optional == "?":
+                return f"{indent}{visibility}{property_name} = input<{type_annotation}>();"
+            else:
+                return f"{indent}{visibility}{property_name} = input.required<{type_annotation}>();"
+        
+        result = input_with_type_pattern.sub(replace_input, result)
+        
+        # Then handle typed properties with initializers: property: Type = value;
         typed_with_init_pattern = re.compile(r"(?m)^(\s*)((?:private|public|protected)\s+)?(\w+)\s*:\s*([^=\n;]+?)\s*=\s*([^;\n]+);")
         
         def replace_typed_with_init(match):
@@ -100,6 +134,10 @@ class AngularToSignalMigration:
             property_name = match.group(3)
             type_annotation = match.group(4).strip()
             value = match.group(5).strip()
+            
+            # Skip if already an input (already processed above)
+            if property_name in input_properties:
+                return match.group(0)
             
             should_convert = (AngularToSignalMigration._is_property_used_in_template(property_name, html_content) or 
                             property_name in properties_used_in_getters or
@@ -122,6 +160,10 @@ class AngularToSignalMigration:
             property_name = match.group(3)
             optional = match.group(4)
             type_annotation = match.group(5).strip()
+            
+            # Skip if already an input (already processed above)
+            if property_name in input_properties:
+                return match.group(0)
             
             should_convert = (AngularToSignalMigration._is_property_used_in_template(property_name, html_content) or 
                             property_name in properties_used_in_getters or
@@ -223,9 +265,36 @@ class AngularToSignalMigration:
         # Now handle property usage (reading, not assignment)
         # Convert property usage to function calls for all detected signal properties
         for signal_prop in detected_signal_properties:
-            # Use negative lookbehind to avoid converting inside getter definitions
-            prop_usage_pattern = re.compile(rf"(?<!get\s+{signal_prop}\(\)\s*[:\w\s]*\{{[^}}]*?)\bthis\.{signal_prop}\b(?!\(\)|s*=|\s*\.set\()")
-            result = prop_usage_pattern.sub(f"this.{signal_prop}()", result)
+            # Instead of negative lookbehind, use a more careful pattern
+            # Match this.propertyName but not when followed by ( or = or .set(
+            prop_usage_pattern = re.compile(rf"\bthis\.{signal_prop}\b(?!\(|s*=|\s*\.set\()")
+            
+            # We need to avoid replacing inside getter definitions, so let's do a more manual approach
+            # Split by lines and check each line
+            lines = result.split('\n')
+            new_lines = []
+            in_getter = False
+            
+            for line in lines:
+                # Check if we're entering a getter definition for this property
+                if re.search(rf"get\s+{signal_prop}\s*\(", line):
+                    in_getter = True
+                    new_lines.append(line)
+                    continue
+                
+                # Check if we're exiting the getter (simplified check)
+                if in_getter and (line.strip().startswith('}') or line.strip() == ''):
+                    in_getter = False
+                    new_lines.append(line)
+                    continue
+                
+                # Only apply the transformation if we're not in a getter
+                if not in_getter:
+                    line = prop_usage_pattern.sub(f"this.{signal_prop}()", line)
+                
+                new_lines.append(line)
+            
+            result = '\n'.join(new_lines)
         
         return result
     
@@ -277,8 +346,8 @@ class AngularToSignalMigration:
                 re.search(rf"\b{property_name}\b", html_content))
     
     @staticmethod
-    def _add_signal_imports(content: str, needs_signal: bool, needs_computed: bool) -> str:
-        if not needs_signal and not needs_computed:
+    def _add_signal_imports(content: str, needs_signal: bool, needs_computed: bool, needs_input: bool) -> str:
+        if not needs_signal and not needs_computed and not needs_input:
             return content
         
         # Check if @angular/core import already exists
@@ -286,7 +355,7 @@ class AngularToSignalMigration:
         match = import_pattern.search(content)
         
         if match:
-            # Angular core import exists, add signal/computed to it
+            # Angular core import exists, add signal/computed/input to it
             full_match = match.group(0)
             existing_imports = match.group(1)
             
@@ -303,6 +372,9 @@ class AngularToSignalMigration:
             if needs_computed and "computed" not in existing_imports:
                 new_imports.append("computed")
             
+            if needs_input and "input" not in existing_imports:
+                new_imports.append("input")
+            
             # Preserve the original spacing style
             if has_spaces:
                 replacement = full_match.replace(existing_imports, f" {separator.join(new_imports)} ")
@@ -317,6 +389,8 @@ class AngularToSignalMigration:
                 imports.append("signal")
             if needs_computed:
                 imports.append("computed")
+            if needs_input:
+                imports.append("input")
             
             import_statement = f"import {{ {', '.join(imports)} }} from '@angular/core';\n"
             return import_statement + content
