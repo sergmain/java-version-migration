@@ -45,29 +45,23 @@ class Content:
 @dataclass 
 class Globals:
     """Global configuration for migration processing."""
-    start_java_version: int = 0
-    target_java_version: int = 21
-    threads: int = 8
-    charset: str = "utf-8"
-    offset: int = 4  # number of spaces as offset in code
-    starting_path: List[Path] = field(default_factory=lambda: [Path("src")])
-    exclude_path: List[Path] = field(default_factory=list)
-    file_mask: str = ".java"
-    metas: List[Dict[str, str]] = field(default_factory=list)
-
-    def __post_init__(self):
-        """Initialize default values after object creation."""
-        if not self.starting_path:
-            self.starting_path = [Path("src")]
+    start_java_version: int
+    target_java_version: int
+    threads: int
+    charset: str
+    offset: int
+    starting_path: List[Path]
+    exclude_path: List[Path]
+    file_mask: str
+    metas: List[Dict[str, str]]
 
     @classmethod
-    def from_yaml(cls, config_path: Union[str, Path] = "config/application.yml") -> 'Globals':
+    def from_yaml(cls, config_path: Union[str, Path]) -> 'Globals':
         """Create Globals instance from YAML configuration file."""
         config_file = Path(config_path)
         
         if not config_file.exists():
-            logger.warning(f"Config file {config_file} not found, using defaults")
-            return cls()
+            raise FileNotFoundError(f"Config file not found: {config_file}")
         
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
@@ -75,11 +69,17 @@ class Globals:
             
             migration_config = config_data.get('migration', {})
             
+            if not migration_config:
+                raise ValueError(f"No 'migration' section found in {config_file}")
+            
             # Convert paths to Path objects
             starting_paths = []
             if 'startingPath' in migration_config:
                 for path_str in migration_config['startingPath']:
                     starting_paths.append(Path(path_str))
+            
+            if not starting_paths:
+                raise ValueError("No startingPath specified in config")
             
             exclude_paths = []
             if 'excludePath' in migration_config:
@@ -103,38 +103,14 @@ class Globals:
                 threads=migration_config.get('threads', 8),
                 charset=migration_config.get('charset', 'utf-8'),
                 offset=migration_config.get('offset', 4),
-                starting_path=starting_paths if starting_paths else [Path("src")],
+                starting_path=starting_paths,
                 exclude_path=exclude_paths,
                 file_mask=migration_config.get('fileMask', '.java'),
                 metas=metas
             )
             
         except Exception as e:
-            logger.error(f"Error loading config from {config_file}: {e}")
-            logger.info("Using default configuration")
-            return cls()
-
-    def to_yaml(self, output_path: Union[str, Path] = "config/application.yml"):
-        """Save current configuration to YAML file."""
-        config_data = {
-            'migration': {
-                'startJavaVersion': self.start_java_version,
-                'targetJavaVersion': self.target_java_version,
-                'threads': self.threads,
-                'charset': self.charset,
-                'offset': self.offset,
-                'fileMask': self.file_mask,
-                'startingPath': [str(path) for path in self.starting_path],
-                'excludePath': [str(path) for path in self.exclude_path],
-                'metas': self.metas
-            }
-        }
-        
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            raise RuntimeError(f"Error loading config from {config_file}: {e}") from e
 
 
 class Config:
@@ -399,17 +375,18 @@ class MetaheuristicMigrationApplication:
                     "../config/application.yml"
                 ]
                 
-                config_found = False
+                config_found = None
                 for candidate in config_candidates:
                     if Path(candidate).exists():
                         self.globals = Globals.from_yaml(candidate)
-                        config_found = True
+                        config_found = candidate
                         logger.info(f"Using config from {candidate}")
                         break
                 
                 if not config_found:
-                    logger.info("No config file found, using defaults")
-                    self.globals = Globals()
+                    raise FileNotFoundError(
+                        "No configuration file found. Searched: " + ", ".join(config_candidates)
+                    )
         else:
             self.globals = globals_config
             
