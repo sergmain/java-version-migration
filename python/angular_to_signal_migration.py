@@ -41,17 +41,25 @@ class AngularToSignalMigration:
         # Get corresponding HTML file content for analysis
         html_content = AngularToSignalMigration._get_html_content(cfg)
         
+        # Debug: Log if HTML content was found
+        if html_content:
+            print(f"DEBUG: Found HTML content for {cfg.path.name}, length: {len(html_content)}")
+        else:
+            print(f"DEBUG: No HTML content found for {cfg.path.name}")
+        
         # Pattern 1: Convert simple properties used in templates to signals
         before_signals = result
         result = AngularToSignalMigration._convert_properties_to_signals(result, html_content, signal_properties)
         if result != before_signals:
             needs_signal_import = True
+            print(f"DEBUG: Converted properties to signals in {cfg.path.name}: {signal_properties}")
         
         # Pattern 2: Convert getter methods to computed signals
         before_computed = result
         result = AngularToSignalMigration._convert_getters_to_computed(result, html_content)
         if result != before_computed:
             needs_computed_import = True
+            print(f"DEBUG: Converted getters to computed in {cfg.path.name}")
             
         # Pattern 3: Update method calls that modify properties to use signal updates and handle property usage
         result = AngularToSignalMigration._convert_property_assignments(result, signal_properties)
@@ -59,7 +67,57 @@ class AngularToSignalMigration:
         # Add necessary imports at the top
         result = AngularToSignalMigration._add_signal_imports(result, needs_signal_import, needs_computed_import, needs_input_import)
         
+        # Pattern 4: Update HTML template if it exists
+        if html_content and signal_properties:
+            AngularToSignalMigration._update_html_template(cfg, signal_properties)
+        
         return result
+    
+    @staticmethod
+    def _update_html_template(cfg: MigrationConfig, signal_properties: set):
+        """Update the corresponding HTML template to add () after signal property references."""
+        ts_file_name = cfg.path.name
+        if not ts_file_name.endswith(".ts"):
+            return
+        
+        base_name = ts_file_name[:-3]
+        html_name = f"{base_name}.html"
+        
+        if html_name not in cfg.files:
+            return
+        
+        html_content = cfg.files[html_name]
+        html_path = cfg.path.parent / html_name
+        
+        if not html_path.exists():
+            return
+        
+        # Update HTML to add () after signal properties
+        updated_html = html_content
+        
+        for signal_prop in signal_properties:
+            # Pattern: propertyName (not followed by () or inside a string/attribute that already has parens)
+            # We need to be careful to only match actual property references, not parts of other words
+            # Match: propertyName followed by space, operator, or closing delimiter
+            # Don't match: propertyName(, propertyName(), or inside quotes
+            
+            # Find all occurrences of the property in various contexts
+            patterns = [
+                # Property followed by operators or whitespace
+                (rf'\b{signal_prop}\b(?!\()', rf'{signal_prop}()'),
+            ]
+            
+            for pattern, replacement in patterns:
+                # Use a simple replacement - may need refinement
+                updated_html = re.sub(pattern, replacement, updated_html)
+        
+        # Write updated HTML if it changed
+        if updated_html != html_content:
+            try:
+                html_path.write_text(updated_html, encoding='utf-8')
+                print(f"\t\tUpdated HTML template: {html_name}")
+            except Exception as e:
+                print(f"ERROR: Could not update HTML template {html_name}: {e}")
     
     @staticmethod
     def _get_html_content(cfg: MigrationConfig) -> str:
@@ -81,28 +139,120 @@ class AngularToSignalMigration:
         for match in input_pattern.finditer(content):
             input_properties.add(match.group(1))
         
+        # Find all input() signal declarations (from ngxtension conversion)
+        input_signal_properties = set()
+        input_signal_pattern = re.compile(r"(\w+)\s*=\s*input(?:\.required)?<")
+        for match in input_signal_pattern.finditer(content):
+            input_signal_properties.add(match.group(1))
+        
+        # Find properties that are assigned to internally - these should NOT be input() signals
+        properties_assigned_internally = set()
+        assignment_pattern = re.compile(r"\bthis\.(\w+)(\(\))?\s*=")
+        for match in assignment_pattern.finditer(content):
+            properties_assigned_internally.add(match.group(1))
+        
+        # input() signals that are assigned internally need to be converted to signal()
+        input_signals_to_convert = input_signal_properties & properties_assigned_internally
+        
+        # Convert input() to signal() for properties that are assigned internally
+        if input_signals_to_convert:
+            for prop_name in input_signals_to_convert:
+                # Match patterns like:
+                # propName = input<Type>();
+                # propName = input.required<Type>();
+                # propName = input<Type>(defaultValue);
+                input_decl_pattern = re.compile(
+                    rf"(\s*)({prop_name})\s*=\s*input(?:\.required)?<([^>]+)>\((.*?)\);"
+                )
+                
+                def replace_input_with_signal(match):
+                    indent = match.group(1)
+                    prop_name = match.group(2)
+                    type_annotation = match.group(3)
+                    default_value = match.group(4).strip()
+                    
+                    signal_properties.add(prop_name)
+                    
+                    if default_value:
+                        return f"{indent}{prop_name} = signal<{type_annotation}>({default_value});"
+                    else:
+                        # Add undefined to type if not already there
+                        if "undefined" not in type_annotation:
+                            type_annotation = f"{type_annotation} | undefined"
+                        return f"{indent}{prop_name} = signal<{type_annotation}>(undefined);"
+                
+                result = input_decl_pattern.sub(replace_input_with_signal, result)
+        
+        # Find all getters - these should NOT be converted to signals (they'll be converted to computed separately)
+        getter_names = set()
+        getter_pattern = re.compile(r"(?s)get\s+(\w+)\(\)")
+        for match in getter_pattern.finditer(content):
+            getter_names.add(match.group(1))
+        
         # First, find all getters used in the template
-        getter_pattern = re.compile(r"(?s)get\s+(\w+)\(\)\s*\{([^}]+)\}")
         getters_used_in_template = set()
         properties_used_in_getters = set()
         
         for match in getter_pattern.finditer(content):
-            getter_name = match.group(1)
-            getter_body = match.group(2)
-            
-            if AngularToSignalMigration._is_property_used_in_template(getter_name, html_content):
-                getters_used_in_template.add(getter_name)
-                # Extract properties used in this getter
-                prop_pattern = re.compile(r"this\.(\w+)(?!\()")
-                for prop_match in prop_pattern.finditer(getter_body):
-                    properties_used_in_getters.add(prop_match.group(1))
+            getter_name = match.group(0)
+            # Extract the getter body
+            getter_full = re.search(rf"get\s+{re.escape(getter_name)}\(\)[^{{]*\{{([^}}]+)\}}", content, re.DOTALL)
+            if getter_full:
+                getter_body = getter_full.group(1)
+                
+                if AngularToSignalMigration._is_property_used_in_template(getter_name, html_content):
+                    getters_used_in_template.add(getter_name)
+                    # Extract properties used in this getter
+                    prop_pattern = re.compile(r"this\.(\w+)(?!\()")
+                    for prop_match in prop_pattern.finditer(getter_body):
+                        properties_used_in_getters.add(prop_match.group(1))
         
         # Find event handler methods and properties modified in them
         properties_modified_in_event_handlers = AngularToSignalMigration._find_properties_modified_in_event_handlers(content, html_content)
         
+        # Helper function to check if a line is inside an interface/type definition OR object literal type
+        def is_inside_interface(line_number: int) -> bool:
+            lines = result.split('\n')
+            if line_number >= len(lines):
+                return False
+            
+            # Look backwards from current line to find if we're inside an interface or object type
+            brace_count = 0
+            in_object_type = False
+            
+            for i in range(line_number, -1, -1):
+                line = lines[i].strip()
+                
+                # Check if this line starts an interface or type
+                if re.match(r'^(export\s+)?(interface|type)\s+\w+', line):
+                    # We found an interface/type definition
+                    # Now count braces forward to see if our line is inside it
+                    for j in range(i, line_number + 1):
+                        brace_count += lines[j].count('{') - lines[j].count('}')
+                    return brace_count > 0
+                
+                # Check if we're inside an object literal type: propertyName: { ... } = {...}
+                # This pattern: "name: {" followed by properties
+                if re.search(r':\s*\{', line) and not re.search(r'=\s*\{', line):
+                    # Count braces to see if we're still inside
+                    for j in range(i, line_number + 1):
+                        brace_count += lines[j].count('{') - lines[j].count('}')
+                    if brace_count > 0:
+                        return True
+                
+                # If we hit a class definition, we're not in an interface
+                if re.match(r'^(export\s+)?(class|@Component)', line):
+                    return False
+                
+                # If we see "} = {" or similar, we might be past the object type definition
+                if re.search(r'\}\s*=', line):
+                    return False
+            
+            return False
+        
         # Process property declarations in correct order to avoid conflicts
         
-        # First handle @Input() decorated properties - convert to input()
+        # First handle @Input() decorated properties - convert to input() ONLY if not assigned internally
         input_with_type_pattern = re.compile(r"(?m)^(\s*)@Input\(\)\s+((?:private|public|protected)\s+)?(\w+)(\??)\s*:\s*([^=;\n]+)(?:\s*=\s*([^;\n]+))?;")
         
         def replace_input(match):
@@ -113,9 +263,17 @@ class AngularToSignalMigration:
             type_annotation = match.group(5).strip()
             default_value = match.group(6)
             
+            # If this @Input() is assigned internally, convert to regular signal instead
+            if property_name in properties_assigned_internally:
+                signal_properties.add(property_name)
+                if default_value:
+                    return f"{indent}{visibility}{property_name} = signal<{type_annotation}>({default_value.strip()});"
+                else:
+                    return f"{indent}{visibility}{property_name} = signal<{type_annotation} | undefined>(undefined);"
+            
+            # Otherwise convert to input()
             signal_properties.add(property_name)
             
-            # Convert @Input() to input()
             if default_value:
                 return f"{indent}{visibility}{property_name} = input<{type_annotation}>({default_value.strip()});"
             elif optional == "?":
@@ -126,57 +284,92 @@ class AngularToSignalMigration:
         result = input_with_type_pattern.sub(replace_input, result)
         
         # Then handle typed properties with initializers: property: Type = value;
-        typed_with_init_pattern = re.compile(r"(?m)^(\s*)((?:private|public|protected)\s+)?(\w+)\s*:\s*([^=\n;]+?)\s*=\s*([^;\n]+);")
+        lines = result.split('\n')
+        new_lines = []
         
-        def replace_typed_with_init(match):
-            indent = match.group(1)
-            visibility = match.group(2) if match.group(2) else ""
-            property_name = match.group(3)
-            type_annotation = match.group(4).strip()
-            value = match.group(5).strip()
+        for line_num, line in enumerate(lines):
+            # Check if this line matches the pattern (with OR without visibility modifier)
+            typed_with_init_match = re.match(r'^(\s*)((?:private|public|protected)\s+)?(\w+)\s*:\s*([^=\n;]+?)\s*=\s*([^;\n]+);', line)
             
-            # Skip if already an input (already processed above)
-            if property_name in input_properties:
-                return match.group(0)
-            
-            should_convert = (AngularToSignalMigration._is_property_used_in_template(property_name, html_content) or 
-                            property_name in properties_used_in_getters or
-                            property_name in properties_modified_in_event_handlers)
-            
-            if should_convert:
-                signal_properties.add(property_name)
-                return f"{indent}{visibility}{property_name} = signal<{type_annotation}>({value});"
+            if typed_with_init_match and not is_inside_interface(line_num):
+                indent = typed_with_init_match.group(1)
+                visibility = typed_with_init_match.group(2) if typed_with_init_match.group(2) else ""
+                property_name = typed_with_init_match.group(3)
+                type_annotation = typed_with_init_match.group(4).strip()
+                value = typed_with_init_match.group(5).strip()
+                
+                # Skip if already an input
+                if property_name in input_properties:
+                    new_lines.append(line)
+                    continue
+                
+                # Skip if already converted input signal
+                if property_name in input_signal_properties:
+                    new_lines.append(line)
+                    continue
+                
+                # Skip if this is a getter name (getters will be converted to computed separately)
+                if property_name in getter_names:
+                    new_lines.append(line)
+                    continue
+                
+                should_convert = (AngularToSignalMigration._is_property_used_in_template(property_name, html_content) or 
+                                property_name in properties_used_in_getters or
+                                property_name in properties_modified_in_event_handlers)
+                
+                if should_convert:
+                    signal_properties.add(property_name)
+                    new_lines.append(f"{indent}{visibility}{property_name} = signal<{type_annotation}>({value});")
+                else:
+                    new_lines.append(line)
             else:
-                return match.group(0)  # No change
+                new_lines.append(line)
         
-        result = typed_with_init_pattern.sub(replace_typed_with_init, result)
+        result = '\n'.join(new_lines)
         
         # Then handle property declarations without initializers: property: Type; or property?: Type;
-        declaration_pattern = re.compile(r"(?m)^(\s*)((?:private|public|protected)\s+)?(\w+)(\??)\s*:\s*([^=;\n]+);")
+        lines = result.split('\n')
+        new_lines = []
         
-        def replace_declaration(match):
-            indent = match.group(1)
-            visibility = match.group(2) if match.group(2) else ""
-            property_name = match.group(3)
-            optional = match.group(4)
-            type_annotation = match.group(5).strip()
+        for line_num, line in enumerate(lines):
+            declaration_match = re.match(r'^(\s*)((?:private|public|protected)\s+)?(\w+)(\??)\s*:\s*([^=;\n]+);', line)
             
-            # Skip if already an input (already processed above)
-            if property_name in input_properties:
-                return match.group(0)
-            
-            should_convert = (AngularToSignalMigration._is_property_used_in_template(property_name, html_content) or 
-                            property_name in properties_used_in_getters or
-                            property_name in properties_modified_in_event_handlers)
-            
-            if should_convert:
-                signal_properties.add(property_name)
-                signal_type = f"{type_annotation} | undefined" if optional == "?" else f"{type_annotation} | undefined"
-                return f"{indent}{visibility}{property_name} = signal<{signal_type}>(undefined);"
+            if declaration_match and not is_inside_interface(line_num):
+                indent = declaration_match.group(1)
+                visibility = declaration_match.group(2) if declaration_match.group(2) else ""
+                property_name = declaration_match.group(3)
+                optional = declaration_match.group(4)
+                type_annotation = declaration_match.group(5).strip()
+                
+                # Skip if already an input
+                if property_name in input_properties:
+                    new_lines.append(line)
+                    continue
+                
+                # Skip if already converted input signal
+                if property_name in input_signal_properties:
+                    new_lines.append(line)
+                    continue
+                
+                # Skip if this is a getter name (getters will be converted to computed separately)
+                if property_name in getter_names:
+                    new_lines.append(line)
+                    continue
+                
+                should_convert = (AngularToSignalMigration._is_property_used_in_template(property_name, html_content) or 
+                                property_name in properties_used_in_getters or
+                                property_name in properties_modified_in_event_handlers)
+                
+                if should_convert:
+                    signal_properties.add(property_name)
+                    signal_type = f"{type_annotation} | undefined" if optional == "?" else f"{type_annotation} | undefined"
+                    new_lines.append(f"{indent}{visibility}{property_name} = signal<{signal_type}>(undefined);")
+                else:
+                    new_lines.append(line)
             else:
-                return match.group(0)  # No change
+                new_lines.append(line)
         
-        result = declaration_pattern.sub(replace_declaration, result)
+        result = '\n'.join(new_lines)
         
         return result
     
@@ -242,18 +435,25 @@ class AngularToSignalMigration:
         for match in signal_declaration_pattern.finditer(content):
             detected_signal_properties.add(match.group(1))
         
+        # Look for patterns like "property = computed(" which indicate the property is a computed signal
+        computed_declaration_pattern = re.compile(r"(\w+)\s*=\s*computed")
+        for match in computed_declaration_pattern.finditer(content):
+            detected_signal_properties.add(match.group(1))
+        
         # Look for patterns like this.propertyName() which indicate the property is a signal
         signal_call_pattern = re.compile(r"\bthis\.(\w+)\(\)")
         for match in signal_call_pattern.finditer(content):
             detected_signal_properties.add(match.group(1))
         
         # Pattern: this.propertyName = value; -> this.propertyName.set(value);
+        # Also handle: this.propertyName() = value; (incorrect after conversion) -> this.propertyName.set(value);
         # Only convert if the property was converted to a signal or detected as signal usage
-        assignment_pattern = re.compile(r"(?m)this\.(\w+)\s*=\s*([^;]+);")
+        assignment_pattern = re.compile(r"(?m)this\.(\w+)(\(\))?\s*=\s*([^;]+);")
         
         def replace_assignment(match):
             property_name = match.group(1)
-            value = match.group(2)
+            has_parens = match.group(2)  # Will be "()" if present, None otherwise
+            value = match.group(3)
             
             if property_name in detected_signal_properties:
                 return f"this.{property_name}.set({value});"
@@ -278,6 +478,12 @@ class AngularToSignalMigration:
             for line in lines:
                 # Check if we're entering a getter definition for this property
                 if re.search(rf"get\s+{signal_prop}\s*\(", line):
+                    in_getter = True
+                    new_lines.append(line)
+                    continue
+                
+                # Check if we're entering a computed definition for this property (already converted)
+                if re.search(rf"{signal_prop}\s*=\s*computed", line):
                     in_getter = True
                     new_lines.append(line)
                     continue
