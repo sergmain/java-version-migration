@@ -41,25 +41,17 @@ class AngularToSignalMigration:
         # Get corresponding HTML file content for analysis
         html_content = AngularToSignalMigration._get_html_content(cfg)
         
-        # Debug: Log if HTML content was found
-        if html_content:
-            print(f"DEBUG: Found HTML content for {cfg.path.name}, length: {len(html_content)}")
-        else:
-            print(f"DEBUG: No HTML content found for {cfg.path.name}")
-        
         # Pattern 1: Convert simple properties used in templates to signals
         before_signals = result
         result = AngularToSignalMigration._convert_properties_to_signals(result, html_content, signal_properties)
         if result != before_signals:
             needs_signal_import = True
-            print(f"DEBUG: Converted properties to signals in {cfg.path.name}: {signal_properties}")
         
         # Pattern 2: Convert getter methods to computed signals
         before_computed = result
         result = AngularToSignalMigration._convert_getters_to_computed(result, html_content)
         if result != before_computed:
             needs_computed_import = True
-            print(f"DEBUG: Converted getters to computed in {cfg.path.name}")
             
         # Pattern 3: Update method calls that modify properties to use signal updates and handle property usage
         result = AngularToSignalMigration._convert_property_assignments(result, signal_properties)
@@ -67,57 +59,7 @@ class AngularToSignalMigration:
         # Add necessary imports at the top
         result = AngularToSignalMigration._add_signal_imports(result, needs_signal_import, needs_computed_import, needs_input_import)
         
-        # Pattern 4: Update HTML template if it exists
-        if html_content and signal_properties:
-            AngularToSignalMigration._update_html_template(cfg, signal_properties)
-        
         return result
-    
-    @staticmethod
-    def _update_html_template(cfg: MigrationConfig, signal_properties: set):
-        """Update the corresponding HTML template to add () after signal property references."""
-        ts_file_name = cfg.path.name
-        if not ts_file_name.endswith(".ts"):
-            return
-        
-        base_name = ts_file_name[:-3]
-        html_name = f"{base_name}.html"
-        
-        if html_name not in cfg.files:
-            return
-        
-        html_content = cfg.files[html_name]
-        html_path = cfg.path.parent / html_name
-        
-        if not html_path.exists():
-            return
-        
-        # Update HTML to add () after signal properties
-        updated_html = html_content
-        
-        for signal_prop in signal_properties:
-            # Pattern: propertyName (not followed by () or inside a string/attribute that already has parens)
-            # We need to be careful to only match actual property references, not parts of other words
-            # Match: propertyName followed by space, operator, or closing delimiter
-            # Don't match: propertyName(, propertyName(), or inside quotes
-            
-            # Find all occurrences of the property in various contexts
-            patterns = [
-                # Property followed by operators or whitespace
-                (rf'\b{signal_prop}\b(?!\()', rf'{signal_prop}()'),
-            ]
-            
-            for pattern, replacement in patterns:
-                # Use a simple replacement - may need refinement
-                updated_html = re.sub(pattern, replacement, updated_html)
-        
-        # Write updated HTML if it changed
-        if updated_html != html_content:
-            try:
-                html_path.write_text(updated_html, encoding='utf-8')
-                print(f"\t\tUpdated HTML template: {html_name}")
-            except Exception as e:
-                print(f"ERROR: Could not update HTML template {html_name}: {e}")
     
     @staticmethod
     def _get_html_content(cfg: MigrationConfig) -> str:
