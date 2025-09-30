@@ -50,8 +50,8 @@ class AngularHtmlSignalMigration:
         print(f"DEBUG: Detected computed: {computed_properties}")
         print(f"DEBUG: Detected input signals (read-only): {input_signals}")
         
-        # Combine all signal-based properties
-        all_signal_properties = signal_properties | computed_properties
+        # Combine all signal-based properties (including input signals - they still need () in templates)
+        all_signal_properties = signal_properties | computed_properties | input_signals
         
         if not all_signal_properties:
             print(f"DEBUG: No signal properties detected for {cfg.path.name}")
@@ -73,7 +73,7 @@ class AngularHtmlSignalMigration:
         return result
     
     @staticmethod
-    def _convert_two_way_bindings(html_content: str, signal_properties: Set[str]) -> str:
+    def _convert_two_way_bindings(html_content: str, signal_properties: Set[str], input_signals: Set[str]) -> str:
         """
         Convert two-way bindings [(ngModel)]="signalName" to [ngModel]="signalName()" (ngModelChange)="signalName.set($event)"
         Because signals don't support two-way binding syntax.
@@ -84,6 +84,11 @@ class AngularHtmlSignalMigration:
         result = html_content
         
         for signal_prop in signal_properties:
+            # Skip input signals - they're read-only
+            if signal_prop in input_signals:
+                print(f"DEBUG: Skipping two-way binding conversion for input signal '{signal_prop}' (read-only)")
+                continue
+            
             # Pattern: [(ngModel)]="signalProp" or [(ngModel)]="signalProp()"
             # Convert to: [ngModel]="signalProp" (ngModelChange)="signalProp.set($event)"
             # The () will be added later in the _add_signal_calls_to_property step

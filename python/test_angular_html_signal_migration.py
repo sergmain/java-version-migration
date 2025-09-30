@@ -78,12 +78,13 @@ export class TestComponent {
         self.assertEqual('<input [ngModel]="rows()" (ngModelChange)="rows.set($event)">', result)
     
     def test_two_way_binding_input_signal_not_converted(self):
-        """Test that [(ngModel)] for input signals is NOT converted to .set()."""
+        """Test that [(ngModel)] for input signals is NOT converted to .set() but gets () added."""
         html = '<input [(ngModel)]="activeField">'
         cfg = self.create_config(html)
         result = AngularHtmlSignalMigration.migrate_html_to_signals(cfg, html)
-        # Input signals are read-only, so keep two-way binding as-is
-        self.assertEqual('<input [(ngModel)]="activeField">', result)
+        # Input signals don't support two-way binding, so we just add () and let Angular error
+        # This alerts the developer they need to change to one-way binding
+        self.assertEqual('<input [(ngModel)]="activeField()">', result)
     
     def test_signal_set_not_modified(self):
         """Test that signal.set() calls are not given extra ()."""
