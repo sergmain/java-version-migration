@@ -44,9 +44,11 @@ class AngularHtmlSignalMigration:
         # Detect signal properties from the TypeScript file
         signal_properties = AngularHtmlSignalMigration._detect_signal_properties(ts_content)
         computed_properties = AngularHtmlSignalMigration._detect_computed_properties(ts_content)
+        input_signals = AngularHtmlSignalMigration._detect_input_signals(ts_content)
         
         print(f"DEBUG: Detected signals: {signal_properties}")
         print(f"DEBUG: Detected computed: {computed_properties}")
+        print(f"DEBUG: Detected input signals (read-only): {input_signals}")
         
         # Combine all signal-based properties
         all_signal_properties = signal_properties | computed_properties
@@ -58,7 +60,8 @@ class AngularHtmlSignalMigration:
         result = html_content
         
         # FIRST: Convert two-way bindings [(ngModel)]="signal" to one-way binding + event
-        result = AngularHtmlSignalMigration._convert_two_way_bindings(result, all_signal_properties)
+        # BUT skip input signals since they're read-only
+        result = AngularHtmlSignalMigration._convert_two_way_bindings(result, all_signal_properties, input_signals)
         
         # THEN: Update HTML to add () after signal properties
         for signal_prop in all_signal_properties:
@@ -119,7 +122,7 @@ class AngularHtmlSignalMigration:
     
     @staticmethod
     def _detect_signal_properties(ts_content: str) -> Set[str]:
-        """Detect properties that are signals in the TypeScript file."""
+        """Detect properties that are writable signals in the TypeScript file."""
         signal_properties = set()
         
         # Pattern: propertyName = signal<...>(...)
@@ -127,13 +130,20 @@ class AngularHtmlSignalMigration:
         for match in signal_pattern.finditer(ts_content):
             signal_properties.add(match.group(1))
         
-        # Pattern: propertyName = input<...>(...)
-        # Note: input() signals are read-only but still need () in templates
+        return signal_properties
+    
+    @staticmethod
+    def _detect_input_signals(ts_content: str) -> Set[str]:
+        """Detect properties that are input signals (read-only) in the TypeScript file."""
+        input_signals = set()
+        
+        # Pattern: propertyName = input<...>(...) or input.required<...>(...)
+        # Note: input() signals are read-only and don't have .set()
         input_pattern = re.compile(r"(\w+)\s*=\s*input(?:\.required)?<")
         for match in input_pattern.finditer(ts_content):
-            signal_properties.add(match.group(1))
+            input_signals.add(match.group(1))
         
-        return signal_properties
+        return input_signals
     
     @staticmethod
     def _detect_computed_properties(ts_content: str) -> Set[str]:
@@ -189,8 +199,12 @@ class AngularHtmlSignalMigration:
             pos_in_line = start - line_start
             end_in_line = end - line_start
             
+            print(f"DEBUG: Checking occurrence of '{property_name}' at position {start} (line pos {pos_in_line})")
+            print(f"DEBUG:   Line: {line}")
+            
             # Check if already followed by (
             if end < len(result) and result[end:end+1] == '(':
+                print(f"DEBUG: Skipping - already has ()")
                 continue
             
             # Check context to determine if we should add ()
@@ -200,6 +214,9 @@ class AngularHtmlSignalMigration:
                 # Insert () after the property in the full content
                 result = result[:end] + '()' + result[end:]
                 changes_made += 1
+                print(f"DEBUG: ADDED () to '{property_name}' at position {start}")
+            else:
+                print(f"DEBUG: SKIPPED '{property_name}' at position {start}")
         
         if changes_made > 0:
             print(f"DEBUG: Made {changes_made} changes for property '{property_name}'")
@@ -261,40 +278,45 @@ class AngularHtmlSignalMigration:
         
         # CRITICAL: Skip if we're inside an object literal like { cols: cols() }
         # Check if we're between { and } and there's a : before our position
+        # BUT exclude {{ and }} which are Angular interpolation braces, not object literals
         last_open_brace = before_full.rfind('{')
         last_close_brace = before_full.rfind('}')
         
+        # Check if the { is part of {{ (Angular interpolation)
+        # The { at position N is part of {{ if the character at position N+1 is also {
+        if last_open_brace != -1:
+            # Check both: is it preceded by { (for the second { in {{) or followed by { (for the first { in {{)
+            is_double_open = False
+            if last_open_brace + 1 < len(before_full) and before_full[last_open_brace + 1] == '{':
+                is_double_open = True  # This is the first { in {{
+            if last_open_brace > 0 and before_full[last_open_brace - 1] == '{':
+                is_double_open = True  # This is the second { in {{
+            
+            if is_double_open:
+                # This is {{, not an object literal brace - skip this check
+                last_open_brace = -1
+        
         if last_open_brace != -1 and (last_close_brace == -1 or last_close_brace < last_open_brace):
-            # We're inside {}, check context more carefully
-            section_after_brace = before_full[last_open_brace:]
+            # We're inside a real {}, check if we're a KEY (before colon) or VALUE (after colon)
             
-            # Find position relative to last colon
-            last_colon_in_section = section_after_brace.rfind(':')
-            last_comma_in_section = section_after_brace.rfind(',')
-            
-            # Determine our position relative to : and ,
-            if last_colon_in_section != -1:
-                text_after_colon = section_after_brace[last_colon_in_section+1:]
-                text_before_property = text_after_colon.rstrip()
-                
-                # If we're the first non-whitespace after :, we're a VALUE
-                if text_before_property == '':
-                    # We're the value: { key: propertyName } - ADD ()
-                    pass  # Continue to add ()
-                else:
-                    # There's something between : and us
-                    pass
-            
-            # Check if we're a KEY (before the colon)
-            # Pattern: { propertyName: value } or { propertyName, ... }
-            text_after_property_pos = section_after_brace[len(section_after_brace) - len(before_full) + start:]
-            
-            # Look ahead to see if there's a : or , or } immediately after us
+            # Look ahead: is there a : or , or } IMMEDIATELY after us (with only whitespace)?
             after_stripped_short = after.lstrip()
-            if after_stripped_short.startswith(':') or after_stripped_short.startswith(',') or after_stripped_short.startswith('}'):
-                # We're a KEY in object literal - don't add ()
+            if after_stripped_short.startswith(':'):
+                # We're a KEY - pattern: { propertyName: ... }
                 print(f"DEBUG: Skipping '{property_name}' at position {start} - object literal key")
                 return False
+            elif after_stripped_short.startswith(',') or after_stripped_short.startswith('}'):
+                # Pattern: { key: propertyName, ... } or { key: propertyName }
+                # We're after a colon, so we're a VALUE - check if there's a : before us
+                section_after_brace = before_full[last_open_brace:]
+                if ':' in section_after_brace:
+                    # There's a : between { and us, so we're a value - ADD ()
+                    pass  # Continue to add ()
+                else:
+                    # No : before us, so we might be shorthand: { propertyName, ... }
+                    # This is treated as a key
+                    print(f"DEBUG: Skipping '{property_name}' at position {start} - object literal shorthand key")
+                    return False
         
         # CRITICAL: Skip if we're inside a property binding bracket [propertyName]
         # This handles cases like [designTimeTemplate]="value" where designTimeTemplate
