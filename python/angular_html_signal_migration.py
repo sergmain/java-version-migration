@@ -74,12 +74,16 @@ class AngularHtmlSignalMigration:
         """
         Convert two-way bindings [(ngModel)]="signalName" to [ngModel]="signalName()" (ngModelChange)="signalName.set($event)"
         Because signals don't support two-way binding syntax.
+        
+        Note: In the binding [ngModel]="signalName()", we call the signal to get its value.
+        But in (ngModelChange)="signalName.set($event)", we use the signal object itself (no parentheses).
         """
         result = html_content
         
         for signal_prop in signal_properties:
             # Pattern: [(ngModel)]="signalProp" or [(ngModel)]="signalProp()"
-            # We need to convert this to: [ngModel]="signalProp()" (ngModelChange)="signalProp.set($event)"
+            # Convert to: [ngModel]="signalProp" (ngModelChange)="signalProp.set($event)"
+            # The () will be added later in the _add_signal_calls_to_property step
             
             # Match with or without () already present
             pattern1 = rf'\[\(ngModel\)\]="({signal_prop})(?:\(\))?"'
@@ -87,8 +91,8 @@ class AngularHtmlSignalMigration:
             
             def replace_two_way(match):
                 prop_name = match.group(1)
-                # Return one-way binding + event
-                # Don't add () here - it will be added in the next step
+                # In [ngModel], the signal will get () added later
+                # In (ngModelChange), use .set() on the signal object (no ())
                 return f'[ngModel]="{prop_name}" (ngModelChange)="{prop_name}.set($event)"'
             
             before = result
@@ -213,18 +217,40 @@ class AngularHtmlSignalMigration:
             print(f"DEBUG: Skipping '{property_name}' - inside comment")
             return False
         
-        # Check what comes after the property
+        # Check what comes before and after the property
+        before = line[max(0, start-10):start]
+        before_full = line[:start]
         after = line[end:end+10] if end < len(line) else ""
+        after_full = line[end:]
+        
+        # CRITICAL: Skip if we're inside an HTML tag name
+        # Pattern: <tagname or </tagname
+        # Check if there's a < before us with no > between < and our position
+        last_open_tag = before_full.rfind('<')
+        last_close_tag = before_full.rfind('>')
+        
+        if last_open_tag != -1 and (last_close_tag == -1 or last_close_tag < last_open_tag):
+            # We're after a < with no closing >
+            # Check if we're in the tag name (before any space or attribute)
+            section_after_tag = before_full[last_open_tag+1:]
+            # Remove / if it's a closing tag
+            if section_after_tag.startswith('/'):
+                section_after_tag = section_after_tag[1:]
+            
+            # If there's no space between < and our position, we're in the tag name
+            if ' ' not in section_after_tag and '\t' not in section_after_tag and '\n' not in section_after_tag:
+                print(f"DEBUG: Skipping '{property_name}' - inside HTML tag name")
+                return False
         
         # Skip if followed by ( - already a method call
         if after.startswith('('):
             print(f"DEBUG: Skipping '{property_name}' - already has ()")
             return False
         
-        # Check what comes before the property
-        before = line[max(0, start-10):start]
-        before_full = line[:start]
-        after_full = line[end:]
+        # Skip if followed by .set( - it's a signal.set() call, not a signal read
+        if after.lstrip().startswith('.set('):
+            print(f"DEBUG: Skipping '{property_name}' - followed by .set()")
+            return False
         
         # CRITICAL: Skip if we're inside an object literal like { cols: cols() }
         # Check if we're between { and } and there's a : before our position
@@ -232,21 +258,36 @@ class AngularHtmlSignalMigration:
         last_close_brace = before_full.rfind('}')
         
         if last_open_brace != -1 and (last_close_brace == -1 or last_close_brace < last_open_brace):
-            # We're inside {}, check if there's a : between { and our position
+            # We're inside {}, check context more carefully
             section_after_brace = before_full[last_open_brace:]
-            if ':' in section_after_brace:
-                # We're in an object literal, check if we're a property name or value
-                # Find the last : before our position
-                last_colon = section_after_brace.rfind(':')
-                # If there's text between : and our position (like whitespace), we might be the value
-                text_between = section_after_brace[last_colon+1:]
+            
+            # Find position relative to last colon
+            last_colon_in_section = section_after_brace.rfind(':')
+            last_comma_in_section = section_after_brace.rfind(',')
+            
+            # Determine our position relative to : and ,
+            if last_colon_in_section != -1:
+                text_after_colon = section_after_brace[last_colon_in_section+1:]
+                text_before_property = text_after_colon.rstrip()
                 
-                # If we're immediately after :, we're the property value
-                # Pattern: { key: propertyName }
-                if text_between.strip() == '':
-                    # We're right after :, so we're a value - don't add ()
-                    print(f"DEBUG: Skipping '{property_name}' - inside object literal as property name")
-                    return False
+                # If we're the first non-whitespace after :, we're a VALUE
+                if text_before_property == '':
+                    # We're the value: { key: propertyName } - ADD ()
+                    pass  # Continue to add ()
+                else:
+                    # There's something between : and us
+                    pass
+            
+            # Check if we're a KEY (before the colon)
+            # Pattern: { propertyName: value } or { propertyName, ... }
+            text_after_property_pos = section_after_brace[len(section_after_brace) - len(before_full) + start:]
+            
+            # Look ahead to see if there's a : or , or } immediately after us
+            after_stripped_short = after.lstrip()
+            if after_stripped_short.startswith(':') or after_stripped_short.startswith(',') or after_stripped_short.startswith('}'):
+                # We're a KEY in object literal - don't add ()
+                print(f"DEBUG: Skipping '{property_name}' - object literal key")
+                return False
         
         # CRITICAL: Skip if we're inside a property binding bracket [propertyName]
         # This handles cases like [designTimeTemplate]="value" where designTimeTemplate
