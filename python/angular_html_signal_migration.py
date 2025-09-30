@@ -57,12 +57,46 @@ class AngularHtmlSignalMigration:
         
         result = html_content
         
-        # Update HTML to add () after signal properties
+        # FIRST: Convert two-way bindings [(ngModel)]="signal" to one-way binding + event
+        result = AngularHtmlSignalMigration._convert_two_way_bindings(result, all_signal_properties)
+        
+        # THEN: Update HTML to add () after signal properties
         for signal_prop in all_signal_properties:
             before = result
             result = AngularHtmlSignalMigration._add_signal_calls_to_property(result, signal_prop)
             if result != before:
                 print(f"DEBUG: Updated property '{signal_prop}' in {cfg.path.name}")
+        
+        return result
+    
+    @staticmethod
+    def _convert_two_way_bindings(html_content: str, signal_properties: Set[str]) -> str:
+        """
+        Convert two-way bindings [(ngModel)]="signalName" to [ngModel]="signalName()" (ngModelChange)="signalName.set($event)"
+        Because signals don't support two-way binding syntax.
+        """
+        result = html_content
+        
+        for signal_prop in signal_properties:
+            # Pattern: [(ngModel)]="signalProp" or [(ngModel)]="signalProp()"
+            # We need to convert this to: [ngModel]="signalProp()" (ngModelChange)="signalProp.set($event)"
+            
+            # Match with or without () already present
+            pattern1 = rf'\[\(ngModel\)\]="({signal_prop})(?:\(\))?"'
+            pattern2 = rf"\[\(ngModel\)\]='({signal_prop})(?:\(\))?'"
+            
+            def replace_two_way(match):
+                prop_name = match.group(1)
+                # Return one-way binding + event
+                # Don't add () here - it will be added in the next step
+                return f'[ngModel]="{prop_name}" (ngModelChange)="{prop_name}.set($event)"'
+            
+            before = result
+            result = re.sub(pattern1, replace_two_way, result)
+            result = re.sub(pattern2, replace_two_way, result)
+            
+            if result != before:
+                print(f"DEBUG: Converted two-way binding [(ngModel)] for signal '{signal_prop}'")
         
         return result
     
@@ -189,13 +223,35 @@ class AngularHtmlSignalMigration:
         
         # Check what comes before the property
         before = line[max(0, start-10):start]
+        before_full = line[:start]
+        after_full = line[end:]
+        
+        # CRITICAL: Skip if we're inside an object literal like { cols: cols() }
+        # Check if we're between { and } and there's a : before our position
+        last_open_brace = before_full.rfind('{')
+        last_close_brace = before_full.rfind('}')
+        
+        if last_open_brace != -1 and (last_close_brace == -1 or last_close_brace < last_open_brace):
+            # We're inside {}, check if there's a : between { and our position
+            section_after_brace = before_full[last_open_brace:]
+            if ':' in section_after_brace:
+                # We're in an object literal, check if we're a property name or value
+                # Find the last : before our position
+                last_colon = section_after_brace.rfind(':')
+                # If there's text between : and our position (like whitespace), we might be the value
+                text_between = section_after_brace[last_colon+1:]
+                
+                # If we're immediately after :, we're the property value
+                # Pattern: { key: propertyName }
+                if text_between.strip() == '':
+                    # We're right after :, so we're a value - don't add ()
+                    print(f"DEBUG: Skipping '{property_name}' - inside object literal as property name")
+                    return False
         
         # CRITICAL: Skip if we're inside a property binding bracket [propertyName]
         # This handles cases like [designTimeTemplate]="value" where designTimeTemplate
         # is the INPUT PROPERTY NAME, not a signal being accessed
         # Look for [ before the property and ] after it (without intervening ] before the property)
-        before_full = line[:start]
-        after_full = line[end:]
         
         # Find the last [ before our position
         last_open_bracket = before_full.rfind('[')

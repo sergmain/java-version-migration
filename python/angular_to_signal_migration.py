@@ -29,51 +29,7 @@ class AngularToSignalMigration:
             return content
             
         result = content
-        needs_signal_import = False
-        needs_computed_import = False
-        needs_input_import = False
-        signal_properties = set()
-        
-        # Check if there are @Input() decorators
-        if "@Input()" in result:
-            needs_input_import = True
-        
-        # Get corresponding HTML file content for analysis
-        html_content = AngularToSignalMigration._get_html_content(cfg)
-        
-        # Pattern 1: Convert simple properties used in templates to signals
-        before_signals = result
-        result = AngularToSignalMigration._convert_properties_to_signals(cfg, result, html_content, signal_properties)
-        if result != before_signals:
-            needs_signal_import = True
-        
-        # Pattern 2: Convert getter methods to computed signals
-        before_computed = result
-        result = AngularToSignalMigration._convert_getters_to_computed(result, html_content)
-        if result != before_computed:
-            needs_computed_import = True
-            
-        # Pattern 3: Update method calls that modify properties to use signal updates and handle property usage
-        result = AngularToSignalMigration._convert_property_assignments(result, signal_properties)
-        
-        # Add necessary imports at the top
-        result = AngularToSignalMigration._add_signal_imports(result, needs_signal_import, needs_computed_import, needs_input_import)
-        
-        return result
-    
-    @staticmethod
-    def _get_html_content(cfg: MigrationConfig) -> str:
-        # Look for corresponding .html file
-        ts_file_name = cfg.path.name
-        if ts_file_name.endswith(".ts"):
-            base_name = ts_file_name[:-3]
-            html_name = f"{base_name}.html"
-            return cfg.files.get(html_name, "")
-        return ""
-    
-    @staticmethod
-    def _convert_properties_to_signals(cfg: MigrationConfig, content: str, html_content: str, signal_properties: Set[str]) -> str:
-        result = content
+        needs_effect_import = False
         
         # Find all @Input() decorated properties - these MUST be converted to input()
         input_properties = set()
@@ -98,6 +54,273 @@ class AngularToSignalMigration:
         assignment_pattern = re.compile(r"\bthis\.(\w+)\.set\(")
         for match in assignment_pattern.finditer(content):
             properties_assigned_internally.add(match.group(1))
+        
+        # Check if any input() properties are being assigned with .set()
+        # This requires automatic refactoring: convert to signal + create separate input
+        input_properties_with_set = input_signal_properties & properties_assigned_internally
+        if input_properties_with_set:
+            needs_effect_import = True
+            print(f"\nDEBUG: Auto-refactoring input properties with .set() calls in {cfg.path.name}")
+            for prop in input_properties_with_set:
+                # Pattern: propName = input<Type>();
+                input_decl_pattern = re.compile(
+                    rf"^(\s*)({prop})\s*=\s*input(?:\.required)?<([^>]+)>\((.*?)\);",
+                    re.MULTILINE
+                )
+                
+                match = input_decl_pattern.search(result)
+                if match:
+                    indent = match.group(1)
+                    prop_name = match.group(2)
+                    type_annotation = match.group(3)
+                    
+                    # Replace with signal + input + effect pattern
+                    replacement = f"""{indent}// Input from parent (read-only)
+{indent}{prop_name}Input = input<{type_annotation}>();
+{indent}// Local state (writable)
+{indent}{prop_name} = signal<{type_annotation} | undefined>(undefined);
+{indent}
+{indent}// Sync input to local signal
+{indent}private _{prop_name}Effect = effect(() => {{
+{indent}    const inputValue = this.{prop_name}Input();
+{indent}    if (inputValue !== undefined) {{
+{indent}        this.{prop_name}.set(inputValue);
+{indent}    }}
+{indent}}});"""
+                    
+                    result = input_decl_pattern.sub(replacement, result)
+                    signal_properties.add(prop_name)
+                    
+                    print(f"DEBUG: Auto-refactored '{prop_name}' to use input + signal pattern")
+                    
+                    # Now update parent HTML files to use the new input name
+                    selector_match = re.search(r"selector:\s*['\"]([^'\"]+)['\"]", result)
+                    if selector_match:
+                        selector = selector_match.group(1)
+                        # Update all HTML files that use this component
+                        for file_name, file_content in cfg.files.items():
+                            if file_name.endswith('.html'):
+                                # Replace [propName]=" with [propNameInput]="
+                                pattern = rf'\[{prop_name}\]='
+                                replacement_pattern = f'[{prop_name}Input]='
+                                updated_content = re.sub(pattern, replacement_pattern, file_content)
+                                if updated_content != file_content:
+                                    # Write back to the file
+                                    html_file_path = cfg.path.parent / file_name
+                                    if html_file_path.exists():
+                                        html_file_path.write_text(updated_content, encoding='utf-8')
+                                        print(f"DEBUG: Updated parent HTML {file_name} to use [{prop_name}Input]")
+        needs_signal_import = False
+        needs_computed_import = False
+        needs_input_import = False
+        needs_effect_import = False
+        signal_properties = set()
+        
+        # Check if there are @Input() decorators
+        if "@Input()" in result:
+            needs_input_import = True
+        
+        # Get corresponding HTML file content for analysis
+        html_content = AngularToSignalMigration._get_html_content(cfg)
+        
+        # Pattern 1: Convert simple properties used in templates to signals
+        before_signals = result
+        result, effect_needed = AngularToSignalMigration._convert_properties_to_signals(cfg, result, html_content, signal_properties)
+        if result != before_signals:
+            needs_signal_import = True
+        if effect_needed:
+            needs_effect_import = True
+        
+        # Pattern 2: Convert getter methods to computed signals
+        before_computed = result
+        result = AngularToSignalMigration._convert_getters_to_computed(result, html_content)
+        if result != before_computed:
+            needs_computed_import = True
+            
+        # Pattern 3: Update method calls that modify properties to use signal updates and handle property usage
+        result = AngularToSignalMigration._convert_property_assignments(result, signal_properties)
+        
+        # Add necessary imports at the top
+        result = AngularToSignalMigration._add_signal_imports(result, needs_signal_import, needs_computed_import, needs_input_import, needs_effect_import)
+        
+        return result
+    
+    @staticmethod
+    def _get_html_content(cfg: MigrationConfig) -> str:
+        # Look for corresponding .html file
+        ts_file_name = cfg.path.name
+        if ts_file_name.endswith(".ts"):
+            base_name = ts_file_name[:-3]
+            html_name = f"{base_name}.html"
+            return cfg.files.get(html_name, "")
+        return ""
+    
+    @staticmethod
+    def _convert_properties_to_signals(cfg: MigrationConfig, content: str, html_content: str, signal_properties: Set[str]) -> tuple[str, bool]:
+        result = content
+        needs_effect_import = False
+        
+        # Find all @Input() decorated properties - these MUST be converted to input()
+        input_properties = set()
+        input_pattern = re.compile(r"@Input\(\)\s+(\w+)")
+        for match in input_pattern.finditer(content):
+            input_properties.add(match.group(1))
+        
+        # Find all input() signal declarations (from ngxtension conversion)
+        input_signal_properties = set()
+        input_signal_pattern = re.compile(r"(\w+)\s*=\s*input(?:\.required)?<")
+        for match in input_signal_pattern.finditer(content):
+            input_signal_properties.add(match.group(1))
+        
+        # Find all existing signal() declarations  
+        existing_signal_properties = set()
+        existing_signal_pattern = re.compile(r"(\w+)\s*=\s*signal<")
+        for match in existing_signal_pattern.finditer(content):
+            existing_signal_properties.add(match.group(1))
+        
+        # Find properties that are assigned to internally
+        properties_assigned_internally = set()
+        assignment_pattern = re.compile(r"\bthis\.(\w+)\.set\(")
+        for match in assignment_pattern.finditer(content):
+            properties_assigned_internally.add(match.group(1))
+        
+        # Check if any input() properties are being assigned with .set()
+        # This requires automatic refactoring: convert to signal + create separate input
+        input_properties_with_set = input_signal_properties & properties_assigned_internally
+        if input_properties_with_set:
+            needs_effect_import = True
+            print(f"\nDEBUG: Auto-refactoring input properties with .set() calls in {cfg.path.name}")
+            for prop in input_properties_with_set:
+                # Pattern: propName = input<Type>();
+                input_decl_pattern = re.compile(
+                    rf"^(\s*)({prop})\s*=\s*input(?:\.required)?<([^>]+)>\((.*?)\);",
+                    re.MULTILINE
+                )
+                
+                match = input_decl_pattern.search(result)
+                if match:
+                    indent = match.group(1)
+                    prop_name = match.group(2)
+                    type_annotation = match.group(3)
+                    
+                    # Replace with signal + input + effect pattern
+                    replacement = f"""{indent}// Input from parent (read-only)
+{indent}{prop_name}Input = input<{type_annotation}>();
+{indent}// Local state (writable)
+{indent}{prop_name} = signal<{type_annotation} | undefined>(undefined);
+{indent}
+{indent}// Sync input to local signal
+{indent}private _{prop_name}Effect = effect(() => {{
+{indent}    const inputValue = this.{prop_name}Input();
+{indent}    if (inputValue !== undefined) {{
+{indent}        this.{prop_name}.set(inputValue);
+{indent}    }}
+{indent}}});"""
+                    
+                    result = input_decl_pattern.sub(replacement, result)
+                    signal_properties.add(prop_name)
+                    
+                    print(f"DEBUG: Auto-refactored '{prop_name}' to use input + signal pattern")
+                    
+                    # Now update parent HTML files to use the new input name
+                    selector_match = re.search(r"selector:\s*['\"]([^'\"]+)['\"]", result)
+                    if selector_match:
+                        selector = selector_match.group(1)
+                        # Update all HTML files that use this component
+                        for file_name, file_content in cfg.files.items():
+                            if file_name.endswith('.html'):
+                                # Replace [propName]=" with [propNameInput]="
+                                pattern = rf'\[{prop_name}\]='
+                                replacement_pattern = f'[{prop_name}Input]='
+                                updated_content = re.sub(pattern, replacement_pattern, file_content)
+                                if updated_content != file_content:
+                                    # Write back to the file
+                                    html_file_path = cfg.path.parent / file_name
+                                    if html_file_path.exists():
+                                        html_file_path.write_text(updated_content, encoding='utf-8')
+                                        print(f"DEBUG: Updated parent HTML {file_name} to use [{prop_name}Input]")
+        
+        # Find all @Input() decorated properties - these MUST be converted to input()
+        input_properties = set()
+        input_pattern = re.compile(r"@Input\(\)\s+(\w+)")
+        for match in input_pattern.finditer(content):
+            input_properties.add(match.group(1))
+        
+        # Find all input() signal declarations (from ngxtension conversion)
+        input_signal_properties = set()
+        input_signal_pattern = re.compile(r"(\w+)\s*=\s*input(?:\.required)?<")
+        for match in input_signal_pattern.finditer(content):
+            input_signal_properties.add(match.group(1))
+        
+        # Find all existing signal() declarations  
+        existing_signal_properties = set()
+        existing_signal_pattern = re.compile(r"(\w+)\s*=\s*signal<")
+        for match in existing_signal_pattern.finditer(content):
+            existing_signal_properties.add(match.group(1))
+        
+        # Find properties that are assigned to internally
+        properties_assigned_internally = set()
+        assignment_pattern = re.compile(r"\bthis\.(\w+)\.set\(")
+        for match in assignment_pattern.finditer(content):
+            properties_assigned_internally.add(match.group(1))
+        
+        # Check if any input() properties are being assigned with .set()
+        # This requires automatic refactoring: convert to signal + create separate input
+        input_properties_with_set = input_signal_properties & properties_assigned_internally
+        if input_properties_with_set:
+            print(f"\nDEBUG: Auto-refactoring input properties with .set() calls in {cfg.path.name}")
+            for prop in input_properties_with_set:
+                # Pattern: propName = input<Type>();
+                input_decl_pattern = re.compile(
+                    rf"^(\s*)({prop})\s*=\s*input(?:\.required)?<([^>]+)>\((.*?)\);",
+                    re.MULTILINE
+                )
+                
+                match = input_decl_pattern.search(result)
+                if match:
+                    indent = match.group(1)
+                    prop_name = match.group(2)
+                    type_annotation = match.group(3)
+                    
+                    # Replace with signal + input + effect pattern
+                    replacement = f"""{indent}// Input from parent (read-only)
+{indent}{prop_name}Input = input<{type_annotation}>();
+{indent}// Local state (writable)
+{indent}{prop_name} = signal<{type_annotation} | undefined>(undefined);
+{indent}
+{indent}// Sync input to local signal
+{indent}private _{prop_name}Effect = effect(() => {{
+{indent}    const inputValue = this.{prop_name}Input();
+{indent}    if (inputValue !== undefined) {{
+{indent}        this.{prop_name}.set(inputValue);
+{indent}    }}
+{indent}}});"""
+                    
+                    result = input_decl_pattern.sub(replacement, result)
+                    signal_properties.add(prop_name)
+                    
+                    # Need to add 'effect' to imports
+                    needs_input_import = True
+                    
+                    print(f"DEBUG: Auto-refactored '{prop_name}' to use input + signal pattern")
+                    
+                    # Now update parent HTML files to use the new input name
+                    selector_match = re.search(r"selector:\s*['\"]([^'\"]+)['\"]", result)
+                    if selector_match:
+                        selector = selector_match.group(1)
+                        # Update all HTML files that use this component
+                        for file_name, file_content in cfg.files.items():
+                            if file_name.endswith('.html'):
+                                # Replace [propName]=" with [propNameInput]="
+                                pattern = rf'\[{prop_name}\]='
+                                replacement_pattern = f'[{prop_name}Input]='
+                                updated_content = re.sub(pattern, replacement_pattern, file_content)
+                                if updated_content != file_content:
+                                    # Write back to the file
+                                    html_file_path = cfg.path.parent / file_name
+                                    if html_file_path.exists():
+                                        html_file_path.write_text(updated_content, encoding='utf-8')
+                                        print(f"DEBUG: Updated parent HTML {file_name} to use [{prop_name}Input]")
         
         # Check if this component is used in other templates and which properties are passed as inputs
         # Look for patterns like [propertyName]="value" in parent HTML files
@@ -351,7 +574,7 @@ class AngularToSignalMigration:
         
         result = '\n'.join(new_lines)
         
-        return result
+        return result, needs_effect_import
     
     @staticmethod
     def _get_html_filename_from_ts(ts_filename: str) -> str:
@@ -364,6 +587,87 @@ class AngularToSignalMigration:
     @staticmethod
     def _convert_getters_to_computed(content: str, html_content: str) -> str:
         result = content
+        needs_effect_import = False
+        
+        # Find all @Input() decorated properties - these MUST be converted to input()
+        input_properties = set()
+        input_pattern = re.compile(r"@Input\(\)\s+(\w+)")
+        for match in input_pattern.finditer(content):
+            input_properties.add(match.group(1))
+        
+        # Find all input() signal declarations (from ngxtension conversion)
+        input_signal_properties = set()
+        input_signal_pattern = re.compile(r"(\w+)\s*=\s*input(?:\.required)?<")
+        for match in input_signal_pattern.finditer(content):
+            input_signal_properties.add(match.group(1))
+        
+        # Find all existing signal() declarations  
+        existing_signal_properties = set()
+        existing_signal_pattern = re.compile(r"(\w+)\s*=\s*signal<")
+        for match in existing_signal_pattern.finditer(content):
+            existing_signal_properties.add(match.group(1))
+        
+        # Find properties that are assigned to internally
+        properties_assigned_internally = set()
+        assignment_pattern = re.compile(r"\bthis\.(\w+)\.set\(")
+        for match in assignment_pattern.finditer(content):
+            properties_assigned_internally.add(match.group(1))
+        
+        # Check if any input() properties are being assigned with .set()
+        # This requires automatic refactoring: convert to signal + create separate input
+        input_properties_with_set = input_signal_properties & properties_assigned_internally
+        if input_properties_with_set:
+            needs_effect_import = True
+            print(f"\nDEBUG: Auto-refactoring input properties with .set() calls in {cfg.path.name}")
+            for prop in input_properties_with_set:
+                # Pattern: propName = input<Type>();
+                input_decl_pattern = re.compile(
+                    rf"^(\s*)({prop})\s*=\s*input(?:\.required)?<([^>]+)>\((.*?)\);",
+                    re.MULTILINE
+                )
+                
+                match = input_decl_pattern.search(result)
+                if match:
+                    indent = match.group(1)
+                    prop_name = match.group(2)
+                    type_annotation = match.group(3)
+                    
+                    # Replace with signal + input + effect pattern
+                    replacement = f"""{indent}// Input from parent (read-only)
+{indent}{prop_name}Input = input<{type_annotation}>();
+{indent}// Local state (writable)
+{indent}{prop_name} = signal<{type_annotation} | undefined>(undefined);
+{indent}
+{indent}// Sync input to local signal
+{indent}private _{prop_name}Effect = effect(() => {{
+{indent}    const inputValue = this.{prop_name}Input();
+{indent}    if (inputValue !== undefined) {{
+{indent}        this.{prop_name}.set(inputValue);
+{indent}    }}
+{indent}}});"""
+                    
+                    result = input_decl_pattern.sub(replacement, result)
+                    signal_properties.add(prop_name)
+                    
+                    print(f"DEBUG: Auto-refactored '{prop_name}' to use input + signal pattern")
+                    
+                    # Now update parent HTML files to use the new input name
+                    selector_match = re.search(r"selector:\s*['\"]([^'\"]+)['\"]", result)
+                    if selector_match:
+                        selector = selector_match.group(1)
+                        # Update all HTML files that use this component
+                        for file_name, file_content in cfg.files.items():
+                            if file_name.endswith('.html'):
+                                # Replace [propName]=" with [propNameInput]="
+                                pattern = rf'\[{prop_name}\]='
+                                replacement_pattern = f'[{prop_name}Input]='
+                                updated_content = re.sub(pattern, replacement_pattern, file_content)
+                                if updated_content != file_content:
+                                    # Write back to the file
+                                    html_file_path = cfg.path.parent / file_name
+                                    if html_file_path.exists():
+                                        html_file_path.write_text(updated_content, encoding='utf-8')
+                                        print(f"DEBUG: Updated parent HTML {file_name} to use [{prop_name}Input]")
         
         # Pattern: get propertyName(): ReturnType { body } -> propertyName = computed(() => { body });
         # Use a more robust pattern to capture the complete getter body including nested braces
@@ -414,6 +718,87 @@ class AngularToSignalMigration:
     @staticmethod
     def _convert_property_assignments(content: str, signal_properties: Set[str]) -> str:
         result = content
+        needs_effect_import = False
+        
+        # Find all @Input() decorated properties - these MUST be converted to input()
+        input_properties = set()
+        input_pattern = re.compile(r"@Input\(\)\s+(\w+)")
+        for match in input_pattern.finditer(content):
+            input_properties.add(match.group(1))
+        
+        # Find all input() signal declarations (from ngxtension conversion)
+        input_signal_properties = set()
+        input_signal_pattern = re.compile(r"(\w+)\s*=\s*input(?:\.required)?<")
+        for match in input_signal_pattern.finditer(content):
+            input_signal_properties.add(match.group(1))
+        
+        # Find all existing signal() declarations  
+        existing_signal_properties = set()
+        existing_signal_pattern = re.compile(r"(\w+)\s*=\s*signal<")
+        for match in existing_signal_pattern.finditer(content):
+            existing_signal_properties.add(match.group(1))
+        
+        # Find properties that are assigned to internally
+        properties_assigned_internally = set()
+        assignment_pattern = re.compile(r"\bthis\.(\w+)\.set\(")
+        for match in assignment_pattern.finditer(content):
+            properties_assigned_internally.add(match.group(1))
+        
+        # Check if any input() properties are being assigned with .set()
+        # This requires automatic refactoring: convert to signal + create separate input
+        input_properties_with_set = input_signal_properties & properties_assigned_internally
+        if input_properties_with_set:
+            needs_effect_import = True
+            print(f"\nDEBUG: Auto-refactoring input properties with .set() calls in {cfg.path.name}")
+            for prop in input_properties_with_set:
+                # Pattern: propName = input<Type>();
+                input_decl_pattern = re.compile(
+                    rf"^(\s*)({prop})\s*=\s*input(?:\.required)?<([^>]+)>\((.*?)\);",
+                    re.MULTILINE
+                )
+                
+                match = input_decl_pattern.search(result)
+                if match:
+                    indent = match.group(1)
+                    prop_name = match.group(2)
+                    type_annotation = match.group(3)
+                    
+                    # Replace with signal + input + effect pattern
+                    replacement = f"""{indent}// Input from parent (read-only)
+{indent}{prop_name}Input = input<{type_annotation}>();
+{indent}// Local state (writable)
+{indent}{prop_name} = signal<{type_annotation} | undefined>(undefined);
+{indent}
+{indent}// Sync input to local signal
+{indent}private _{prop_name}Effect = effect(() => {{
+{indent}    const inputValue = this.{prop_name}Input();
+{indent}    if (inputValue !== undefined) {{
+{indent}        this.{prop_name}.set(inputValue);
+{indent}    }}
+{indent}}});"""
+                    
+                    result = input_decl_pattern.sub(replacement, result)
+                    signal_properties.add(prop_name)
+                    
+                    print(f"DEBUG: Auto-refactored '{prop_name}' to use input + signal pattern")
+                    
+                    # Now update parent HTML files to use the new input name
+                    selector_match = re.search(r"selector:\s*['\"]([^'\"]+)['\"]", result)
+                    if selector_match:
+                        selector = selector_match.group(1)
+                        # Update all HTML files that use this component
+                        for file_name, file_content in cfg.files.items():
+                            if file_name.endswith('.html'):
+                                # Replace [propName]=" with [propNameInput]="
+                                pattern = rf'\[{prop_name}\]='
+                                replacement_pattern = f'[{prop_name}Input]='
+                                updated_content = re.sub(pattern, replacement_pattern, file_content)
+                                if updated_content != file_content:
+                                    # Write back to the file
+                                    html_file_path = cfg.path.parent / file_name
+                                    if html_file_path.exists():
+                                        html_file_path.write_text(updated_content, encoding='utf-8')
+                                        print(f"DEBUG: Updated parent HTML {file_name} to use [{prop_name}Input]")
         
         # First, detect additional signal properties by looking for existing signal() calls in the code
         detected_signal_properties = set(signal_properties)
@@ -541,8 +926,8 @@ class AngularToSignalMigration:
                 re.search(rf"\b{property_name}\b", html_content))
     
     @staticmethod
-    def _add_signal_imports(content: str, needs_signal: bool, needs_computed: bool, needs_input: bool) -> str:
-        if not needs_signal and not needs_computed and not needs_input:
+    def _add_signal_imports(content: str, needs_signal: bool, needs_computed: bool, needs_input: bool, needs_effect: bool) -> str:
+        if not needs_signal and not needs_computed and not needs_input and not needs_effect:
             return content
         
         # Check if @angular/core import already exists
@@ -550,7 +935,7 @@ class AngularToSignalMigration:
         match = import_pattern.search(content)
         
         if match:
-            # Angular core import exists, add signal/computed/input to it
+            # Angular core import exists, add signal/computed/input/effect to it
             full_match = match.group(0)
             existing_imports = match.group(1)
             
@@ -570,6 +955,9 @@ class AngularToSignalMigration:
             if needs_input and "input" not in existing_imports:
                 new_imports.append("input")
             
+            if needs_effect and "effect" not in existing_imports:
+                new_imports.append("effect")
+            
             # Preserve the original spacing style
             if has_spaces:
                 replacement = full_match.replace(existing_imports, f" {separator.join(new_imports)} ")
@@ -586,6 +974,8 @@ class AngularToSignalMigration:
                 imports.append("computed")
             if needs_input:
                 imports.append("input")
+            if needs_effect:
+                imports.append("effect")
             
             import_statement = f"import {{ {', '.join(imports)} }} from '@angular/core';\n"
             return import_statement + content
