@@ -187,15 +187,37 @@ class AngularHtmlSignalMigration:
             print(f"DEBUG: Skipping '{property_name}' - already has ()")
             return False
         
+        # Check what comes before the property
+        before = line[max(0, start-10):start]
+        
+        # CRITICAL: Skip if we're inside a property binding bracket [propertyName]
+        # This handles cases like [designTimeTemplate]="value" where designTimeTemplate
+        # is the INPUT PROPERTY NAME, not a signal being accessed
+        # Look for [ before the property and ] after it (without intervening ] before the property)
+        before_full = line[:start]
+        after_full = line[end:]
+        
+        # Find the last [ before our position
+        last_open_bracket = before_full.rfind('[')
+        # Find the last ] before our position (to see if we closed the bracket)
+        last_close_bracket = before_full.rfind(']')
+        
+        if last_open_bracket != -1:
+            # Check if we're inside [...] by seeing if there's no ] between [ and our position
+            if last_close_bracket == -1 or last_close_bracket < last_open_bracket:
+                # We're inside a [, now check if there's a ] after us
+                next_close_bracket = after_full.find(']')
+                if next_close_bracket != -1:
+                    # We're inside [...], which means this is a property binding NAME, not a value
+                    print(f"DEBUG: Skipping '{property_name}' - inside property binding bracket [...]")
+                    return False
+        
         # Skip if followed by = - it's an assignment (shouldn't happen in templates but just in case)
         # BUT allow == and === for comparisons
         after_stripped = after.lstrip()
         if after_stripped.startswith('=') and not after_stripped.startswith('==') and not after_stripped.startswith('==='):
             print(f"DEBUG: Skipping '{property_name}' - followed by =")
             return False
-        
-        # Check what comes before the property
-        before = line[max(0, start-10):start]
         
         # Skip if preceded by @ - it's a decorator or special syntax
         if before.rstrip().endswith('@'):
@@ -228,39 +250,63 @@ class AngularHtmlSignalMigration:
         In Angular templates, things like [attr]="expression" should NOT be considered
         as being inside a string - the expression part needs signal () added.
         """
-        # Don't treat Angular attribute bindings as strings
-        # Patterns like: [property]="expression", (event)="expression", [(ngModel)]="expression"
-        # Look backwards to see if we're inside an Angular binding
+        # First, check if we're inside an Angular binding expression
+        # These should NEVER be considered "inside a string"
         before = line[:pos]
+        after = line[pos:]
         
-        # Check if we're inside [...="  or (..."  or [(...]=" 
-        angular_binding_start = max(
-            before.rfind('="'),
-            before.rfind("='")
-        )
+        # Find the nearest = before our position
+        last_equals = before.rfind('=')
+        if last_equals != -1:
+            # Get the quote after the =
+            after_equals = before[last_equals+1:].lstrip()
+            if after_equals and after_equals[0] in ('"', "'"):
+                quote_char = after_equals[0]
+                # Find where this quote started
+                quote_start = before.find(quote_char, last_equals)
+                
+                # Check if there's a closing quote after our position
+                closing_quote = (before[quote_start+1:] + after).find(quote_char)
+                
+                if closing_quote != -1:
+                    # We're inside a quoted expression after =
+                    # Now check if this is an Angular binding
+                    section_before_equals = before[:last_equals].rstrip()
+                    
+                    # Check for Angular binding patterns: [...], (...), [(...)], @if, @for, etc.
+                    if section_before_equals.endswith(']') or \
+                       section_before_equals.endswith(')') or \
+                       ' @if ' in section_before_equals or \
+                       ' @for ' in section_before_equals or \
+                       ' @switch ' in section_before_equals:
+                        # This is an Angular expression, not a regular string
+                        return False
         
-        if angular_binding_start != -1:
-            # Check if there's a [ or ( before the ="
-            check_section = before[:angular_binding_start]
-            if check_section.rfind('[') > check_section.rfind(']'):
-                # We're inside [...]="..."
-                return False
-            if check_section.rfind('(') > check_section.rfind(')'):
-                # We're inside (...)="..."
-                return False
+        # For non-Angular contexts, check if we're in a regular string
+        # We need to be more careful here - only mark as "inside string" if we're truly
+        # in a string literal that's NOT part of an Angular expression
         
-        # For regular strings (not Angular bindings), count quotes
-        single_quotes = 0
-        double_quotes = 0
+        # Simple heuristic: if we see class=' or class=" before our position,
+        # and we're between those quotes, we're in a CSS class name, not a binding
+        class_attr_match = re.search(r'''class\s*=\s*(['"])([^'"]*$)''', before)
+        if class_attr_match:
+            quote_char = class_attr_match.group(1)
+            # Check if there's a closing quote after our position
+            if quote_char in after:
+                # We're inside a class attribute value
+                return True
         
-        for i in range(pos):
-            if line[i] == "'" and (i == 0 or line[i-1] != '\\'):
-                single_quotes += 1
-            elif line[i] == '"' and (i == 0 or line[i-1] != '\\'):
-                double_quotes += 1
+        # Check for other regular HTML attributes (not Angular bindings)
+        # Pattern: word="..." or word='...' where word doesn't start with [ or (
+        attr_match = re.search(r'''\s(\w+)\s*=\s*(['"])([^'"]*$)''', before)
+        if attr_match:
+            attr_name = attr_match.group(1)
+            quote_char = attr_match.group(2)
+            # If attribute doesn't look like an Angular binding and has closing quote
+            if not attr_name.startswith('[') and not attr_name.startswith('(') and quote_char in after:
+                return True
         
-        # If odd number of quotes, we're inside a regular string
-        return (single_quotes % 2 == 1) or (double_quotes % 2 == 1)
+        return False
     
     @staticmethod
     def _is_inside_comment(line: str, pos: int) -> bool:

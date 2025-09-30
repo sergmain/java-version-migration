@@ -103,3 +103,33 @@ migrateAngularToSignalMigrationTest_realWorldEscapeSequences()
 migrateAngularToSignalMigrationTest_complexTypes()
 
 ==============================================
+The issue is:
+In kakuro-puzzle.component.html (parent):
+html<puzzle-grid [activeField]="activeField()" ...>
+The parent is passing activeField() to the child component. This is CORRECT because activeField is a signal in the parent.
+BUT, in puzzle-grid.component.ts (child), activeField is defined as:
+typescriptactiveField = signal<Cell | undefined>(undefined);
+This is WRONG. It should be:
+typescriptactiveField = input<Cell | undefined>();
+
+
+=======================
+ok, explanation is here, all before has lowest priority
+
+we are coding tool to migrate any angular based application to signal system
+migration of .ts is done
+rn, we coding migration of .html to signal system
+after running angular_html_signal_migration.py and building my angular ver 20 app i've got an error:
+X [ERROR] NG8002: Can't bind to 'activeField' since it isn't a known property of 'puzzle-grid'.
+1. If 'puzzle-grid' is an Angular component and it has 'activeField' input, then verify that it is included in the '@Component.imports' of this component.
+2. If 'puzzle-grid' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@Component.schemas' of this component to suppress this message.
+3. To allow any property add 'NO_ERRORS_SCHEMA' to the '@Component.schemas' of this component. [plugin angular-compiler]
+    src/app/modules/kakuro/kakuro-puzzle/kakuro-puzzle.component.html:83:37:
+      83 │ ...kuro]="kakuro()" [activeField]="activeField()" (activeFieldChan...
+         ╵                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+this error shows that migration wasn't done correctly AND you need to fix migration tool in such way that this errror gone
+
+i've already provided you with needed files
+in angular_html_signal_migration.py you change primary file , which in this case is .html and has access to other files in current dir, so you can access .ts for better understanding how to change .html
+is that clear?

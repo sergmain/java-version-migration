@@ -43,7 +43,7 @@ class AngularToSignalMigration:
         
         # Pattern 1: Convert simple properties used in templates to signals
         before_signals = result
-        result = AngularToSignalMigration._convert_properties_to_signals(result, html_content, signal_properties)
+        result = AngularToSignalMigration._convert_properties_to_signals(cfg, result, html_content, signal_properties)
         if result != before_signals:
             needs_signal_import = True
         
@@ -72,7 +72,7 @@ class AngularToSignalMigration:
         return ""
     
     @staticmethod
-    def _convert_properties_to_signals(content: str, html_content: str, signal_properties: Set[str]) -> str:
+    def _convert_properties_to_signals(cfg: MigrationConfig, content: str, html_content: str, signal_properties: Set[str]) -> str:
         result = content
         
         # Find all @Input() decorated properties - these MUST be converted to input()
@@ -87,27 +87,65 @@ class AngularToSignalMigration:
         for match in input_signal_pattern.finditer(content):
             input_signal_properties.add(match.group(1))
         
-        # Find properties that are assigned to internally - these should NOT be input() signals
+        # Find all existing signal() declarations  
+        existing_signal_properties = set()
+        existing_signal_pattern = re.compile(r"(\w+)\s*=\s*signal<")
+        for match in existing_signal_pattern.finditer(content):
+            existing_signal_properties.add(match.group(1))
+        
+        # Find properties that are assigned to internally
         properties_assigned_internally = set()
-        assignment_pattern = re.compile(r"\bthis\.(\w+)(\(\))?\s*=")
+        assignment_pattern = re.compile(r"\bthis\.(\w+)\.set\(")
         for match in assignment_pattern.finditer(content):
             properties_assigned_internally.add(match.group(1))
         
-        # input() signals that are assigned internally need to be converted to signal()
-        input_signals_to_convert = input_signal_properties & properties_assigned_internally
+        # Check if this component is used in other templates and which properties are passed as inputs
+        # Look for patterns like [propertyName]="value" in parent HTML files
+        properties_used_as_inputs_in_parents = set()
         
-        # Convert input() to signal() for properties that are assigned internally
-        if input_signals_to_convert:
-            for prop_name in input_signals_to_convert:
-                # Match patterns like:
-                # propName = input<Type>();
-                # propName = input.required<Type>();
-                # propName = input<Type>(defaultValue);
-                input_decl_pattern = re.compile(
-                    rf"(\s*)({prop_name})\s*=\s*input(?:\.required)?<([^>]+)>\((.*?)\);"
+        # Get the component selector from @Component decorator
+        selector_match = re.search(r"selector:\s*['\"]([^'\"]+)['\"]", content)
+        if selector_match:
+            selector = selector_match.group(1)
+            print(f"DEBUG: Found component selector: {selector}")
+            
+            # Check all HTML files for usage of this component
+            for file_name, file_content in cfg.files.items():
+                if file_name.endswith('.html') and file_name != AngularToSignalMigration._get_html_filename_from_ts(cfg.path.name):
+                    # Look for this component being used with input bindings
+                    # Pattern: <selector [propertyName]="..."
+                    component_usage_pattern = rf'<{re.escape(selector)}[^>]*?\[(\w+)\]='
+                    matches = list(re.finditer(component_usage_pattern, file_content))
+                    if matches:
+                        print(f"DEBUG: Found component usage in {file_name}")
+                        for match in matches:
+                            prop_name = match.group(1)
+                            properties_used_as_inputs_in_parents.add(prop_name)
+                            print(f"DEBUG: Found input binding: [{prop_name}]")
+        
+        if properties_used_as_inputs_in_parents:
+            print(f"DEBUG: Properties used as inputs from parents: {properties_used_as_inputs_in_parents}")
+        
+        # Signals that are used as inputs from parent components should be converted to input()
+        # BUT only if they're not assigned internally
+        signals_to_convert_to_inputs = existing_signal_properties & properties_used_as_inputs_in_parents - properties_assigned_internally
+        
+        if existing_signal_properties:
+            print(f"DEBUG: Existing signal properties: {existing_signal_properties}")
+        if properties_assigned_internally:
+            print(f"DEBUG: Properties assigned internally: {properties_assigned_internally}")
+        if signals_to_convert_to_inputs:
+            print(f"DEBUG: Signals to convert to inputs: {signals_to_convert_to_inputs}")
+        
+        # Convert signal() to input() for properties used as inputs from parents
+        if signals_to_convert_to_inputs:
+            for prop_name in signals_to_convert_to_inputs:
+                # Match patterns like: propName = signal<Type>(...);
+                signal_decl_pattern = re.compile(
+                    rf"(\s*)({prop_name})\s*=\s*signal<([^>]+)>\(([^)]*)\);"
                 )
                 
-                def replace_input_with_signal(match):
+                def replace_signal_with_input(match):
                     indent = match.group(1)
                     prop_name = match.group(2)
                     type_annotation = match.group(3)
@@ -115,15 +153,15 @@ class AngularToSignalMigration:
                     
                     signal_properties.add(prop_name)
                     
-                    if default_value:
-                        return f"{indent}{prop_name} = signal<{type_annotation}>({default_value});"
+                    # input() doesn't take default values in the same way
+                    # If there was a default value, make it optional, otherwise required
+                    if default_value and default_value != 'undefined':
+                        return f"{indent}{prop_name} = input<{type_annotation}>();"
                     else:
-                        # Add undefined to type if not already there
-                        if "undefined" not in type_annotation:
-                            type_annotation = f"{type_annotation} | undefined"
-                        return f"{indent}{prop_name} = signal<{type_annotation}>(undefined);"
+                        return f"{indent}{prop_name} = input<{type_annotation}>();"
                 
-                result = input_decl_pattern.sub(replace_input_with_signal, result)
+                result = signal_decl_pattern.sub(replace_signal_with_input, result)
+                print(f"DEBUG: Converted signal '{prop_name}' to input() because it's used as input from parent")
         
         # Find all getters - these should NOT be converted to signals (they'll be converted to computed separately)
         getter_names = set()
@@ -314,6 +352,14 @@ class AngularToSignalMigration:
         result = '\n'.join(new_lines)
         
         return result
+    
+    @staticmethod
+    def _get_html_filename_from_ts(ts_filename: str) -> str:
+        """Convert TypeScript filename to HTML filename."""
+        if ts_filename.endswith(".ts"):
+            base_name = ts_filename[:-3]
+            return f"{base_name}.html"
+        return ""
     
     @staticmethod
     def _convert_getters_to_computed(content: str, html_content: str) -> str:
