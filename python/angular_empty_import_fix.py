@@ -18,13 +18,12 @@ class AngularEmptyImportFix:
     """
     
     @staticmethod
-    def process(cfg: MigrationConfig, globals_config, content: str) -> Content:
+    def process(cfg: MigrationConfig, content: str) -> Content:
         """
         Process TypeScript component file to add missing imports array to @Component decorators.
         
         Args:
             cfg: Migration configuration containing file path and related files
-            globals_config: Global configuration (not used in this migration)
             content: The TypeScript file content to process
             
         Returns:

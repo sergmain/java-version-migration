@@ -12,7 +12,6 @@ class TestAngularEmptyImportFix(unittest.TestCase):
             path=Path("test.component.ts"),
             files={}
         )
-        self.globals_config = None  # Not used in this migration
     
     def test_simple_component_without_imports(self):
         """Test adding imports to a simple component without imports property."""
