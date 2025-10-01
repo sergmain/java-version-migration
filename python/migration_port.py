@@ -226,7 +226,13 @@ class Migration:
         """Angular HTML template signal migration implementation."""
         from angular_html_signal_migration import AngularHtmlSignalMigration
         return AngularHtmlSignalMigration.process(config, content)
-    
+
+    @staticmethod
+    def angular_empty_import_fix(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
+        """Angular empty import fix implementation."""
+        from angular_empty_import_fix import AngularEmptyImportFix
+        return AngularEmptyImportFix.process(config, globals_config, content)
+
     # Define migration functions by version
     functions: List[MigrationFunctions] = [
         MigrationFunctions(21, [
