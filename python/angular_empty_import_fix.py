@@ -1,19 +1,12 @@
 import re
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Dict
 
-
-@dataclass
-class Content:
-    content: str
-    changed: bool
-
-
-@dataclass 
-class MigrationConfig:
-    path: Path
-    files: Dict[str, str]
+# Import shared data classes from migration_port
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+from migration_port import Content, MigrationConfig
 
 
 class AngularEmptyImportFix:

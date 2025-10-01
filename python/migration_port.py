@@ -215,29 +215,32 @@ class Migration:
     """Migration processing logic."""
     
     @staticmethod
-    def angular_to_signal_migration(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
-        """Angular to Signal migration implementation."""
-        from angular_to_signal_migration import AngularToSignalMigration
-        # The AngularToSignalMigration.process expects (config, content) not (config, globals, content)
-        return AngularToSignalMigration.process(config, content)
+    def _create_migration(module_name: str, class_name: str):
+        """
+        Factory method to create a migration function dynamically.
+        
+        Args:
+            module_name: The module to import (e.g., 'angular_html_signal_migration')
+            class_name: The class name (e.g., 'AngularHtmlSignalMigration')
+            
+        Returns:
+            A migration function compatible with the framework
+        """
+        def migration_func(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
+            module = __import__(module_name, fromlist=[class_name])
+            migration_class = getattr(module, class_name)
+            return migration_class.process(config, content)
+        
+        migration_func.__name__ = module_name
+        migration_func.__doc__ = f"{class_name} implementation."
+        return migration_func
     
-    @staticmethod
-    def angular_html_signal_migration(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
-        """Angular HTML template signal migration implementation."""
-        from angular_html_signal_migration import AngularHtmlSignalMigration
-        return AngularHtmlSignalMigration.process(config, content)
-
-    @staticmethod
-    def angular_empty_import_fix(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
-        """Angular empty import fix implementation."""
-        from angular_empty_import_fix import AngularEmptyImportFix
-        return AngularEmptyImportFix.process(config, globals_config, content)
-
     # Define migration functions by version
     functions: List[MigrationFunctions] = [
         MigrationFunctions(21, [
-            # angular_to_signal_migration,
-            angular_html_signal_migration
+            # _create_migration('angular_to_signal_migration', 'AngularToSignalMigration'),
+            _create_migration('angular_empty_import_fix', 'AngularEmptyImportFix'),
+            # _create_migration('angular_html_signal_migration', 'AngularHtmlSignalMigration'),
         ])
     ]
     
