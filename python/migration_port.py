@@ -211,44 +211,6 @@ class MigrationUtils:
         return 0
 
 
-class Migration:
-    """Migration processing logic."""
-    
-    @staticmethod
-    def _create_migration(module_name: str, class_name: str):
-        """
-        Factory method to create a migration function dynamically.
-        
-        Args:
-            module_name: The module to import (e.g., 'angular_html_signal_migration')
-            class_name: The class name (e.g., 'AngularHtmlSignalMigration')
-            
-        Returns:
-            A migration function compatible with the framework
-        """
-        def migration_func(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
-            module = __import__(module_name, fromlist=[class_name])
-            migration_class = getattr(module, class_name)
-            return migration_class.process(config, content)
-        
-        migration_func.__name__ = module_name
-        migration_func.__doc__ = f"{class_name} implementation."
-        return migration_func
-    
-    # Define migration functions by version
-    functions: List[MigrationFunctions] = [
-        MigrationFunctions(21, [
-            # _create_migration('angular_to_signal_migration', 'AngularToSignalMigration'),
-            # _create_migration('angular_empty_import_fix', 'AngularEmptyImportFix'),
-            _create_migration('angular_authentication_migration', 'AngularAuthenticationMigration'),
-            # _create_migration('angular_html_signal_migration', 'AngularHtmlSignalMigration'),
-        ])
-    ]
-    
-    # Sort by version
-    functions.sort(key=lambda x: x.version)
-
-
 class MigrationProcessor:
     """Main migration processor."""
     
@@ -431,6 +393,44 @@ class MetaheuristicMigrationApplication:
         
         app = MetaheuristicMigrationApplication(config_path=config_path)
         app.run(*args)
+
+
+class Migration:
+    """Migration processing logic."""
+
+    @staticmethod
+    def _create_migration(module_name: str, class_name: str):
+        """
+        Factory method to create a migration function dynamically.
+
+        Args:
+            module_name: The module to import (e.g., 'angular_html_signal_migration')
+            class_name: The class name (e.g., 'AngularHtmlSignalMigration')
+
+        Returns:
+            A migration function compatible with the framework
+        """
+        def migration_func(config: MigrationConfig, globals_config: Globals, content: str) -> Content:
+            module = __import__(module_name, fromlist=[class_name])
+            migration_class = getattr(module, class_name)
+            return migration_class.process(config, content)
+
+        migration_func.__name__ = module_name
+        migration_func.__doc__ = f"{class_name} implementation."
+        return migration_func
+
+    # Define migration functions by version
+    functions: List[MigrationFunctions] = [
+        MigrationFunctions(21, [
+            # _create_migration('angular_to_signal_migration', 'AngularToSignalMigration'),
+            # _create_migration('angular_empty_import_fix', 'AngularEmptyImportFix'),
+            _create_migration('angular_html_signal_migration', 'AngularHtmlSignalMigration'),
+            # _create_migration('angular_authentication_migration', 'AngularAuthenticationMigration'),
+        ])
+    ]
+
+    # Sort by version
+    functions.sort(key=lambda x: x.version)
 
 
 if __name__ == "__main__":
