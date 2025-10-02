@@ -34,9 +34,9 @@ class TestAngularAuthenticationMigration(unittest.TestCase):
         self.assertEqual(result.content, expected)
         self.assertTrue(result.changed)
     
-    def test_multiple_inject_properties(self):
-        """Test migrating multiple inject properties."""
-        content = """export class AiRootComponent {
+    def test_only_authentication_service_migrated(self):
+        """Test that ONLY authenticationService is migrated, not other inject properties."""
+        content = """export class TestComponent {
     private router = inject(Router);
     private settingsService = inject(SettingsService);
     public readonly authenticationService = inject(AuthenticationService);
@@ -48,15 +48,17 @@ class TestAngularAuthenticationMigration(unittest.TestCase):
         
         result = AngularAuthenticationMigration.process(self.config, content)
         
-        # Verify properties are removed
-        self.assertNotIn('private router = inject(Router);', result.content)
-        self.assertNotIn('private settingsService = inject(SettingsService);', result.content)
+        # Verify OTHER properties are NOT removed
+        self.assertIn('private router = inject(Router);', result.content)
+        self.assertIn('private settingsService = inject(SettingsService);', result.content)
+        
+        # Verify authenticationService IS removed from properties
         self.assertNotIn('public readonly authenticationService = inject(AuthenticationService);', result.content)
         
-        # Verify constructor has parameters
-        self.assertIn('private router: Router = inject(Router)', result.content)
-        self.assertIn('private settingsService: SettingsService = inject(SettingsService)', result.content)
+        # Verify constructor has ONLY authenticationService parameter
         self.assertIn('public readonly authenticationService: AuthenticationService = inject(AuthenticationService)', result.content)
+        self.assertNotIn('private router: Router = inject(Router)', result.content)
+        self.assertNotIn('private settingsService: SettingsService = inject(SettingsService)', result.content)
         
         # Verify super call is updated
         self.assertIn('super(authenticationService)', result.content)
@@ -96,9 +98,10 @@ class TestAngularAuthenticationMigration(unittest.TestCase):
         self.assertEqual(result.content, content)
         self.assertFalse(result.changed)
     
-    def test_no_inject_properties(self):
-        """Test when there are no inject properties."""
+    def test_no_authentication_service(self):
+        """Test when there's no authenticationService property."""
         content = """export class TestComponent {
+    private router = inject(Router);
     private normalProperty: string;
 
     constructor() {
@@ -139,6 +142,7 @@ class TestAngularAuthenticationMigration(unittest.TestCase):
     protected authService = inject(AuthenticationService);
 
     constructor() {
+        super(this.authService);
     }
 }"""
         
@@ -154,6 +158,7 @@ class TestAngularAuthenticationMigration(unittest.TestCase):
     authService = inject(AuthenticationService);
 
     constructor() {
+        super(this.authService);
     }
 }"""
         
@@ -235,8 +240,40 @@ class TestAngularAuthenticationMigration(unittest.TestCase):
         result3 = AngularAuthenticationMigration._split_parameters(params3)
         self.assertEqual(len(result3), 0)
     
+    def test_ignores_non_component_constructor(self):
+        """Test that constructors without super() calls are ignored."""
+        content = """export class SimpleScenarioStepWithParent {
+    constructor(node: SimpleScenarioStep, parent: SimpleScenarioStep) {
+        this.node = node;
+        this.parent = parent;
+    }
+    node: SimpleScenarioStep;
+    parent: SimpleScenarioStep;
+}
+
+export class TestComponent {
+    public readonly authenticationService = inject(AuthenticationService);
+    
+    constructor() {
+        super(this.authenticationService);
+    }
+}"""
+        
+        result = AngularAuthenticationMigration.process(self.config, content)
+        
+        # Verify the SimpleScenarioStepWithParent constructor is NOT modified
+        self.assertIn('constructor(node: SimpleScenarioStep, parent: SimpleScenarioStep)', result.content)
+        self.assertIn('this.node = node;', result.content)
+        
+        # Verify authenticationService IS migrated in TestComponent
+        self.assertNotIn('public readonly authenticationService = inject(AuthenticationService);', result.content)
+        self.assertIn('public readonly authenticationService: AuthenticationService = inject(AuthenticationService)', result.content)
+        self.assertIn('super(authenticationService)', result.content)
+        
+        self.assertTrue(result.changed)
+    
     def test_complex_real_world_example(self):
-        """Test the exact example from requirements."""
+        """Test the exact example from requirements - only authenticationService should be migrated."""
         content = """export class AiRootComponent extends UIStateComponent implements OnInit, OnDestroy {
     private router = inject(Router);
     private settingsService = inject(SettingsService);
@@ -252,15 +289,15 @@ class TestAngularAuthenticationMigration(unittest.TestCase):
         
         result = AngularAuthenticationMigration.process(self.config, content)
         
-        # Verify inject properties are removed
-        self.assertNotIn('private router = inject(Router);', result.content)
-        self.assertNotIn('private settingsService = inject(SettingsService);', result.content)
+        # Verify ONLY authenticationService inject property is removed
+        self.assertIn('private router = inject(Router);', result.content)
+        self.assertIn('private settingsService = inject(SettingsService);', result.content)
         self.assertNotIn('public readonly authenticationService = inject(AuthenticationService);', result.content)
         
-        # Verify constructor has all parameters
+        # Verify constructor has ONLY authenticationService parameter
         self.assertIn('constructor(', result.content)
-        self.assertIn('private router: Router = inject(Router)', result.content)
-        self.assertIn('private settingsService: SettingsService = inject(SettingsService)', result.content)
+        self.assertNotIn('private router: Router = inject(Router)', result.content)
+        self.assertNotIn('private settingsService: SettingsService = inject(SettingsService)', result.content)
         self.assertIn('public readonly authenticationService: AuthenticationService = inject(AuthenticationService)', result.content)
         
         # Verify super call uses parameter name
@@ -281,7 +318,7 @@ class TestIntegration(unittest.TestCase):
     """Integration tests for real-world scenarios."""
     
     def test_full_component_migration(self):
-        """Test migrating a complete component file."""
+        """Test migrating a complete component file - only authenticationService."""
         content = """import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticationService } from './auth.service';
@@ -304,10 +341,13 @@ export class AiRootComponent extends UIStateComponent implements OnInit {
         config = MigrationConfig(path=Path("ai-root.component.ts"), files={})
         result = AngularAuthenticationMigration.process(config, content)
         
-        # Should migrate inject properties to constructor
+        # Should migrate ONLY authenticationService to constructor
         self.assertIn('constructor(', result.content)
-        self.assertIn('private router: Router = inject(Router)', result.content)
+        self.assertNotIn('private router: Router = inject(Router)', result.content)
         self.assertIn('public readonly authenticationService: AuthenticationService = inject(AuthenticationService)', result.content)
+        
+        # Router should remain as property
+        self.assertIn('private router = inject(Router);', result.content)
         
         # Should update super call
         self.assertIn('super(authenticationService)', result.content)

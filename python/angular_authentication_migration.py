@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, List, Optional
 
 # Import shared data classes from migration_port
 import sys
@@ -11,10 +11,10 @@ from migration_port import Content, MigrationConfig
 
 class AngularAuthenticationMigration:
     """
-    Migrates inject() calls from class properties to constructor parameters.
+    Migrates ONLY authenticationService inject() call from class property to constructor parameter.
     
-    This migration focuses on moving inject() calls (especially authenticationService)
-    from class properties to constructor parameters with default values.
+    This migration focuses on moving ONLY the authenticationService inject() call
+    from class properties to constructor parameters with default values in classes with super() calls.
     """
     
     @staticmethod
@@ -35,11 +35,9 @@ class AngularAuthenticationMigration:
     @staticmethod
     def migrate_inject_to_constructor(content: str) -> str:
         """
-        Migrate inject() calls from class properties to constructor parameters.
+        Migrate ONLY authenticationService inject() call from class property to constructor parameter.
         
-        Pattern to migrate:
-        - Property: private/public router = inject(Router);
-        - To: Constructor parameter with default value
+        Only migrates in classes that have a super() call in their constructor.
         
         Args:
             content: The TypeScript file content
@@ -50,49 +48,109 @@ class AngularAuthenticationMigration:
         if not content.strip():
             return content
         
+        # Find all classes
+        classes = AngularAuthenticationMigration._find_classes(content)
+        
         result = content
         
-        # Find all inject() property declarations
-        inject_properties = AngularAuthenticationMigration._find_inject_properties(result)
-        
-        if not inject_properties:
-            return result
-        
-        # Find the constructor
-        constructor_info = AngularAuthenticationMigration._find_constructor(result)
-        
-        if not constructor_info:
-            # No constructor found, cannot migrate
-            return result
-        
-        # Remove inject property declarations
-        for prop in inject_properties:
-            result = AngularAuthenticationMigration._remove_property_declaration(result, prop)
-        
-        # Add parameters to constructor
-        result = AngularAuthenticationMigration._add_constructor_parameters(
-            result, constructor_info, inject_properties
-        )
-        
-        # Update super() call if authenticationService is involved
-        result = AngularAuthenticationMigration._update_super_call(result, inject_properties)
+        # Process each class separately
+        for class_info in classes:
+            # Find inject properties in this class
+            inject_properties = AngularAuthenticationMigration._find_inject_properties_in_class(
+                result, class_info
+            )
+            
+            if not inject_properties:
+                continue
+            
+            # Find constructor in this class
+            constructor_info = AngularAuthenticationMigration._find_constructor_in_class(
+                result, class_info
+            )
+            
+            if not constructor_info:
+                continue
+            
+            # Check if constructor has super() call
+            if not AngularAuthenticationMigration._has_super_call(result, constructor_info):
+                continue
+            
+            # Remove properties first
+            for prop in inject_properties:
+                result = AngularAuthenticationMigration._remove_property_declaration(result, prop)
+            
+            # Re-find class and constructor after removal
+            classes = AngularAuthenticationMigration._find_classes(result)
+            # Find the same class (by position or name)
+            class_info = next((c for c in classes if c['name'] == class_info['name']), None)
+            if not class_info:
+                continue
+                
+            constructor_info = AngularAuthenticationMigration._find_constructor_in_class(
+                result, class_info
+            )
+            
+            if not constructor_info:
+                continue
+            
+            # Add parameters to constructor
+            result = AngularAuthenticationMigration._add_constructor_parameters(
+                result, constructor_info, inject_properties
+            )
+            
+            # Update super() call
+            result = AngularAuthenticationMigration._update_super_call(result, inject_properties)
         
         return result
     
     @staticmethod
-    def _find_inject_properties(content: str) -> list:
+    def _find_classes(content: str) -> List[dict]:
         """
-        Find all property declarations using inject().
+        Find all class declarations in the content.
         
         Returns:
-            List of dicts with property info: {
-                'visibility': 'private'/'public'/None,
-                'readonly': True/False,
-                'name': 'propertyName',
-                'type': 'TypeName',
-                'full_match': 'entire declaration'
+            List of dicts with class info: {
+                'name': 'ClassName',
+                'start': start position,
+                'end': end position (approximate)
             }
         """
+        classes = []
+        pattern = re.compile(r'export\s+class\s+(\w+)', re.MULTILINE)
+        
+        matches = list(pattern.finditer(content))
+        
+        for i, match in enumerate(matches):
+            class_name = match.group(1)
+            class_start = match.start()
+            
+            # Find the end of this class (start of next class or end of file)
+            if i < len(matches) - 1:
+                class_end = matches[i + 1].start()
+            else:
+                class_end = len(content)
+            
+            classes.append({
+                'name': class_name,
+                'start': class_start,
+                'end': class_end
+            })
+        
+        return classes
+    
+    @staticmethod
+    def _find_inject_properties_in_class(content: str, class_info: dict) -> list:
+        """
+        Find authentication service inject properties within a specific class.
+        
+        Args:
+            content: The file content
+            class_info: Class information dict
+            
+        Returns:
+            List of property dicts
+        """
+        class_content = content[class_info['start']:class_info['end']]
         properties = []
         
         # Pattern: (private|public)? (readonly)? propertyName = inject(TypeName);
@@ -101,78 +159,102 @@ class AngularAuthenticationMigration:
             re.MULTILINE
         )
         
-        for match in pattern.finditer(content):
-            prop_info = {
-                'visibility': match.group(1),  # private/public/protected or None
-                'readonly': match.group(2) == 'readonly',
-                'name': match.group(3),
-                'type': match.group(4),
-                'full_match': match.group(0)
-            }
-            properties.append(prop_info)
+        for match in pattern.finditer(class_content):
+            prop_name = match.group(3)
+            # Only include properties with authentication service in the name
+            if 'authenticationService' in prop_name or 'authService' in prop_name:
+                prop_info = {
+                    'visibility': match.group(1),
+                    'readonly': match.group(2) == 'readonly',
+                    'name': prop_name,
+                    'type': match.group(4),
+                    'full_match': match.group(0)
+                }
+                properties.append(prop_info)
         
         return properties
     
     @staticmethod
-    def _find_constructor(content: str) -> dict:
+    def _find_constructor_in_class(content: str, class_info: dict) -> Optional[dict]:
         """
-        Find the constructor and extract its information.
+        Find the constructor within a specific class.
         
+        Args:
+            content: The file content
+            class_info: Class information dict
+            
         Returns:
-            Dict with constructor info: {
-                'start': start position,
-                'params_start': position after opening paren,
-                'params_end': position before closing paren,
-                'body_start': position after opening brace,
-                'existing_params': list of existing parameters
-            }
-            or None if no constructor found
+            Constructor info dict or None
         """
-        # Pattern: constructor(...)
+        class_start = class_info['start']
+        class_end = class_info['end']
+        class_content = content[class_start:class_end]
+        
+        # Find constructor in class content
         constructor_pattern = re.compile(r'\bconstructor\s*\(', re.MULTILINE)
-        match = constructor_pattern.search(content)
+        match = constructor_pattern.search(class_content)
         
         if not match:
             return None
         
-        params_start = match.end()
+        # Adjust positions to be relative to full content
+        constructor_start_in_class = match.start()
+        params_start_in_class = match.end()
         
-        # Find the closing paren for parameters
+        # Find closing paren
         paren_count = 1
-        i = params_start
-        params_end = -1
+        i = params_start_in_class
+        params_end_in_class = -1
         
-        while i < len(content) and paren_count > 0:
-            if content[i] == '(':
+        while i < len(class_content) and paren_count > 0:
+            if class_content[i] == '(':
                 paren_count += 1
-            elif content[i] == ')':
+            elif class_content[i] == ')':
                 paren_count -= 1
                 if paren_count == 0:
-                    params_end = i
+                    params_end_in_class = i
                     break
             i += 1
         
-        if params_end == -1:
+        if params_end_in_class == -1:
+            return None
+        
+        # Find opening brace
+        body_start_in_class = class_content.find('{', params_end_in_class)
+        if body_start_in_class == -1:
             return None
         
         # Extract existing parameters
-        params_text = content[params_start:params_end].strip()
+        params_text = class_content[params_start_in_class:params_end_in_class].strip()
         existing_params = []
         
         if params_text:
-            # Split by comma, but be careful of nested types like Map<string, number>
             existing_params = AngularAuthenticationMigration._split_parameters(params_text)
         
-        # Find the opening brace of constructor body
-        body_start = content.find('{', params_end)
-        
         return {
-            'start': match.start(),
-            'params_start': params_start,
-            'params_end': params_end,
-            'body_start': body_start,
+            'start': class_start + constructor_start_in_class,
+            'params_start': class_start + params_start_in_class,
+            'params_end': class_start + params_end_in_class,
+            'body_start': class_start + body_start_in_class,
             'existing_params': existing_params
         }
+    
+    @staticmethod
+    def _has_super_call(content: str, constructor_info: dict) -> bool:
+        """
+        Check if a constructor has a super() call.
+        
+        Args:
+            content: The file content
+            constructor_info: Constructor information dict
+            
+        Returns:
+            True if constructor has a super() call, False otherwise
+        """
+        body_start = constructor_info['body_start']
+        # Look for super( in the next ~300 characters
+        body_preview = content[body_start:body_start + 300]
+        return 'super(' in body_preview
     
     @staticmethod
     def _split_parameters(params_text: str) -> list:
@@ -274,8 +356,16 @@ class AngularAuthenticationMigration:
             # Multiple parameters - multi-line format
             params_text = '\n    ' + ',\n    '.join(all_params) + '\n'
         
-        # Replace the parameters section
-        result = content[:params_start] + params_text + content[params_end:]
+        # Build the new constructor signature
+        # We need to replace from start of constructor to the opening brace
+        constructor_start = constructor_info['start']
+        body_start = constructor_info['body_start']
+        
+        # Build new constructor signature
+        new_constructor = f"constructor({params_text})"
+        
+        # Replace from constructor keyword to opening brace (exclusive)
+        result = content[:constructor_start] + new_constructor + ' ' + content[body_start:]
         
         return result
     
@@ -301,5 +391,27 @@ class AngularAuthenticationMigration:
             result = re.sub(pattern, replacement, result)
         
         return result
-
-
+    
+    # Backward compatibility aliases for tests
+    @staticmethod
+    def _find_inject_properties(content: str) -> list:
+        """Backward compatibility method for tests."""
+        # For test compatibility, find all inject properties in the content
+        properties = []
+        pattern = re.compile(
+            r'^\s*(private|public|protected)?\s*(readonly)?\s*(\w+)\s*=\s*inject\((\w+)\);',
+            re.MULTILINE
+        )
+        
+        for match in pattern.finditer(content):
+            prop_name = match.group(3)
+            prop_info = {
+                'visibility': match.group(1),
+                'readonly': match.group(2) == 'readonly',
+                'name': prop_name,
+                'type': match.group(4),
+                'full_match': match.group(0)
+            }
+            properties.append(prop_info)
+        
+        return properties

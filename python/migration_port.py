@@ -239,7 +239,8 @@ class Migration:
     functions: List[MigrationFunctions] = [
         MigrationFunctions(21, [
             # _create_migration('angular_to_signal_migration', 'AngularToSignalMigration'),
-            _create_migration('angular_empty_import_fix', 'AngularEmptyImportFix'),
+            # _create_migration('angular_empty_import_fix', 'AngularEmptyImportFix'),
+            _create_migration('angular_authentication_migration', 'AngularAuthenticationMigration'),
             # _create_migration('angular_html_signal_migration', 'AngularHtmlSignalMigration'),
         ])
     ]
